@@ -54,7 +54,7 @@ typedef uint32_t (*ScanFn)(const MiningJob& job, uint32_t nonce, uint32_t count,
 static uint32_t scan_hw(const MiningJob& job, uint32_t nonce, uint32_t count,
                         uint32_t* cands, int maxCands, int* nCands)
 {
-    return hw_scan(job.blk1, job.blk2, nonce, count, cands, maxCands, nCands);
+    return hw_scan(job.blk1, job.blk2, nonce, count, HW_CAND_MASK, cands, maxCands, nCands);
 }
 
 static uint32_t scan_sw(const MiningJob& job, uint32_t nonce, uint32_t count,

@@ -24,12 +24,13 @@ static bool check(const char* name, bool ok)
     return ok;
 }
 
-// Vergleicht die HW-Pipeline ueber `n` aufeinanderfolgende Nonces mit der Software.
-// Liefert die Anzahl abweichender Hashes (-1 bei Speichermangel).
+// Vergleicht den Mining-Code (hw_scan) ueber `n` aufeinanderfolgende Nonces mit der
+// Software. Mit Maske 1 ist jede zweite Nonce ein Kandidat; ein falscher Hash faellt
+// so mit 50 % Wahrscheinlichkeit auf. Liefert die Anzahl Abweichungen (-1 bei Speichermangel).
 static int pipeline_mismatches(uint32_t n)
 {
-    uint32_t* h7 = (uint32_t*)malloc(n * sizeof(uint32_t));
-    if (!h7) return -1;
+    uint32_t* cands = (uint32_t*)malloc(n * sizeof(uint32_t));
+    if (!cands) return -1;
 
     uint32_t b1[16], b2[3], mid[8];
     esp_fill_random(b1, sizeof(b1));
@@ -37,11 +38,12 @@ static int pipeline_mismatches(uint32_t n)
     memcpy(mid, SHA256_H0, 32);
     sha256_transform(mid, b1);
     uint32_t start = esp_random();
-    hw_scan_h7(b1, b2, start, n, h7);
+    int nc = 0;
+    hw_scan(b1, b2, start, n, 1, cands, (int)n, &nc);
 
     uint32_t w1[16] = { b2[0], b2[1], b2[2], 0, 0x80000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 640 };
     uint32_t w2[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0x80000000, 0, 0, 0, 0, 0, 0, 256 };
-    int mismatches = 0;
+    int mismatches = 0, k = 0;
     for (uint32_t i = 0; i < n; i++) {
         uint32_t s[8];
         w1[3] = __builtin_bswap32(start + i);
@@ -50,9 +52,12 @@ static int pipeline_mismatches(uint32_t n)
         memcpy(w2, s, 32);
         memcpy(s, SHA256_H0, 32);
         sha256_transform(s, w2);
-        if (s[7] != h7[i]) mismatches++;
+        const bool expect = (s[7] & 1) == 0;
+        const bool got = k < nc && cands[k] == start + i;
+        if (got) k++;
+        if (expect != got) mismatches++;
     }
-    free(h7);
+    free(cands);
     return mismatches;
 }
 
@@ -63,7 +68,7 @@ static int pipeline_mismatches(uint32_t n)
 static const int CAL_MAX_ERRORS_6K  = 1;
 static const int CAL_MAX_ERRORS_20K = 4;
 
-static bool timing_ok(const HwTiming& tm)
+static bool timing_ok_once(const HwTiming& tm)
 {
     hw_sha_set_timing(tm);
     int errors = 0;
@@ -75,43 +80,85 @@ static bool timing_ok(const HwTiming& tm)
     return errors <= CAL_MAX_ERRORS_6K;
 }
 
-// Sucht den kleinsten fehlerfreien Wert fuer `*field` (alle anderen Werte bleiben).
-static bool find_min(HwTiming& tm, uint32_t* field, uint32_t from, uint32_t to, uint32_t step)
+// Grundrauschen (~1 falscher Hash je 17 000, Langzeittest Master 002) laesst einen
+// guten Wert gelegentlich durchfallen; die Binaersuche springt dann viel zu hoch
+// (gesehen: Hash 2 = 60 statt 3). Daher zaehlt erst ein zweites Durchfallen.
+static bool timing_ok(const HwTiming& tm)
 {
-    for (uint32_t v = from; v <= to; v += step) {
-        *field = v;
-        if (timing_ok(tm)) return true;
-    }
-    return false;
+    return timing_ok_once(tm) || timing_ok_once(tm);
 }
+
+// Sucht per Binaersuche den kleinsten fehlerfreien Wert fuer `*field` in [lo, hi]
+// (alle anderen Werte bleiben). `hi` muss fehlerfrei sein.
+static bool find_min(HwTiming& tm, uint32_t* field, uint32_t lo, uint32_t hi)
+{
+    *field = hi;
+    if (!timing_ok(tm)) return false;
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo) / 2;
+        *field = mid;
+        if (timing_ok(tm)) hi = mid;
+        else               lo = mid + 1;
+    }
+    *field = hi;
+    return true;
+}
+
+// Zweiter Durchgang: Nachdem alle Phasen knapp eingestellt sind, geht oft noch
+// etwas weniger (die Phasen beeinflussen sich gegenseitig ueber den Bus).
+static void tighten(HwTiming& tm, uint32_t* field)
+{
+    while (*field > 0) {
+        (*field)--;
+        if (!timing_ok(tm)) { (*field)++; return; }
+    }
+}
+
+static HwTiming s_lim;   // gefundene Grenzwerte (ohne Reserve)
 
 bool selftest_calibrate()
 {
     Serial.println("[Kalibrierung]");
-    HwTiming tm = { { 120, 120, 120 }, 40 };     // sicher
-    HwTiming lim;
+    HwTiming tm = HW_TIMING_SAFE;
+    const uint32_t t0 = millis();
 
-    // Jede Phase einzeln: kleinsten Wert suchen, dann mit Reserve festhalten
-    static const char* names[3] = { "Block 1", "Block 2", "Hash 2" };
-    for (int i = 0; i < 3; i++) {
-        if (!find_min(tm, &tm.block[i], 30, 120, 2)) {
+    uint32_t* fields[5] = { &tm.block[0], &tm.block[1], &tm.block[2], &tm.load[0], &tm.load[1] };
+    const HwTiming safe = HW_TIMING_SAFE;
+    const uint32_t safeVal[5] = { safe.block[0], safe.block[1], safe.block[2], safe.load[0], safe.load[1] };
+    static const char* names[5] = { "Block 1", "Block 2", "Hash 2", "Load 1", "Load 2" };
+
+    // Jede Phase einzeln minimal suchen, dann gemeinsam nachschaerfen
+    for (int i = 0; i < 5; i++) {
+        if (!find_min(tm, fields[i], 0, safeVal[i])) {
             Serial.printf("  Keine fehlerfreie Wartezeit fuer %s gefunden\n", names[i]);
             return false;
         }
-        lim.block[i] = tm.block[i];
-        tm.block[i] += HW_CAL_MARGIN_BLOCK;
     }
-    if (!find_min(tm, &tm.load, 0, 40, 1)) return false;
-    lim.load = tm.load;
-    tm.load += HW_CAL_MARGIN_LOAD;
+    for (int i = 0; i < 5; i++) tighten(tm, fields[i]);
+    const HwTiming lim = tm;
+    s_lim = lim;
 
-    hw_sha_set_timing(tm);
-    int errors = pipeline_mismatches(20000);
-    bool ok = errors >= 0 && errors <= CAL_MAX_ERRORS_20K;
-    Serial.printf("  Grenze: %lu/%lu/%lu Load %lu  ->  eingestellt: %lu/%lu/%lu Load %lu  (%d/20000 Fehler) %s\n",
+    // Reserve drauf
+    for (int i = 0; i < 3; i++) tm.block[i] += HW_CAL_MARGIN_BLOCK;
+    for (int i = 0; i < 2; i++) tm.load[i] += HW_CAL_MARGIN_LOAD;
+
+    // Endpruefung ueber 20 000 Nonces; bei zu vielen Fehlern schrittweise Reserve drauf
+    int errors = -1;
+    bool ok = false;
+    for (int extra = 0; extra < 4 && !ok; extra++) {
+        if (extra) {
+            for (int i = 0; i < 5; i++) (*fields[i])++;
+        }
+        hw_sha_set_timing(tm);
+        errors = pipeline_mismatches(20000);
+        ok = errors >= 0 && errors <= CAL_MAX_ERRORS_20K;
+    }
+    Serial.printf("  Grenze: %lu/%lu/%lu Load %lu/%lu  ->  eingestellt: %lu/%lu/%lu Load %lu/%lu  (%d/20000 Fehler, %lu ms) %s\n",
                   (unsigned long)lim.block[0], (unsigned long)lim.block[1], (unsigned long)lim.block[2],
-                  (unsigned long)lim.load, (unsigned long)tm.block[0], (unsigned long)tm.block[1],
-                  (unsigned long)tm.block[2], (unsigned long)tm.load, errors, ok ? "OK" : "FEHLER");
+                  (unsigned long)lim.load[0], (unsigned long)lim.load[1],
+                  (unsigned long)tm.block[0], (unsigned long)tm.block[1], (unsigned long)tm.block[2],
+                  (unsigned long)tm.load[0], (unsigned long)tm.load[1], errors,
+                  (unsigned long)(millis() - t0), ok ? "OK" : "FEHLER");
     return ok;
 }
 
@@ -143,7 +190,7 @@ bool selftest_run()
     ok &= check("Software-Scan findet Genesis-Nonce", nc == 1 && cands[0] == genesisNonce);
 
     nc = 0;
-    hw_scan(b1, b2, genesisNonce - 2, 4, cands, 8, &nc);
+    hw_scan(b1, b2, genesisNonce - 2, 4, HW_CAND_MASK, cands, 8, &nc);
     ok &= check("Hardware-Scan findet Genesis-Nonce", nc == 1 && cands[0] == genesisNonce);
 
     // Zufaellige Header: HW == SW
@@ -178,7 +225,7 @@ void selftest_benchmark()
 
     const uint32_t N_HW = 200000;
     uint32_t t0 = micros();
-    hw_scan(b1, b2, 0, N_HW, cands, 8, &nc);
+    hw_scan(b1, b2, 0, N_HW, HW_CAND_MASK, cands, 8, &nc);
     uint32_t tHw = micros() - t0;
 
     const uint32_t N_SW = 10000;
@@ -189,4 +236,61 @@ void selftest_benchmark()
     Serial.printf("[Benchmark] Hardware: %.1f kH/s (%lu Takte/Hash) | Software: %.1f kH/s\n",
                   N_HW * 1000.0 / tHw, (unsigned long)((uint64_t)tHw * 240 / N_HW),
                   N_SW * 1000.0 / tSw);
+}
+
+// Misst fuer Reserve 0..4 Takte die Fehlerrate (bei laufendem WLAN/Pool) und die Takte/Hash.
+void selftest_margin_sweep()
+{
+    const HwTiming keep = hw_sha_timing();
+    uint32_t b1[16], b2[3], cands[8];
+    int nc;
+    esp_fill_random(b1, sizeof(b1));
+    esp_fill_random(b2, sizeof(b2));
+    Serial.println("[Reserve-Test] je 100000 Nonces, Software-Pruefung (WLAN aktiv)");
+    for (uint32_t m = 0; m <= 4; m++) {
+        HwTiming tm = s_lim;
+        for (int i = 0; i < 3; i++) tm.block[i] += m;
+        for (int i = 0; i < 2; i++) tm.load[i] += m;
+        hw_sha_set_timing(tm);
+        int errors = 0;
+        for (int r = 0; r < 5; r++) errors += pipeline_mismatches(20000);
+        uint32_t t0 = micros();
+        hw_scan(b1, b2, 0, 100000, HW_CAND_MASK, cands, 8, &nc);
+        uint32_t dt = micros() - t0;
+        Serial.printf("  Reserve %lu: %lu/%lu/%lu Load %lu/%lu -> %lu Takte = %.1f kH/s | %d Fehler (erkannt) /100000\n",
+                      (unsigned long)m, (unsigned long)tm.block[0], (unsigned long)tm.block[1],
+                      (unsigned long)tm.block[2], (unsigned long)tm.load[0], (unsigned long)tm.load[1],
+                      (unsigned long)((uint64_t)dt * 240 / 100000), 100000 * 1000.0 / dt, errors);
+    }
+    hw_sha_set_timing(keep);
+}
+
+// Langzeit-Fehlertest: Reserve `margin` fuer `minutes` Minuten, Zwischenstand jede Minute.
+// Mit Maske 1 wird jeder falsche Hash mit 50 % Wahrscheinlichkeit erkannt.
+void selftest_long_test(uint32_t margin, uint32_t minutes)
+{
+    const HwTiming keep = hw_sha_timing();
+    HwTiming tm = s_lim;
+    for (int i = 0; i < 3; i++) tm.block[i] += margin;
+    for (int i = 0; i < 2; i++) tm.load[i] += margin;
+    hw_sha_set_timing(tm);
+    Serial.printf("[Langzeittest] Reserve %lu (%lu/%lu/%lu Load %lu/%lu), %lu Minuten, WLAN aktiv\n",
+                  (unsigned long)margin, (unsigned long)tm.block[0], (unsigned long)tm.block[1],
+                  (unsigned long)tm.block[2], (unsigned long)tm.load[0], (unsigned long)tm.load[1],
+                  (unsigned long)minutes);
+    const uint32_t t0 = millis();
+    uint64_t checked = 0;
+    uint32_t errors = 0;
+    for (uint32_t m = 1; m <= minutes; m++) {
+        while (millis() - t0 < m * 60000UL) {
+            int e = pipeline_mismatches(20000);
+            if (e > 0) errors += e;
+            checked += 20000;
+            vTaskDelay(1);
+        }
+        Serial.printf("  Reserve %lu, Minute %2lu: %llu Hashes geprueft, %lu Fehler erkannt -> ca. 1 Fehler je %s Hashes\n",
+                      (unsigned long)margin, (unsigned long)m, (unsigned long long)checked, (unsigned long)errors,
+                      errors ? String((unsigned long)(checked / (2ULL * errors))).c_str() : "(keiner)");
+    }
+    hw_sha_set_timing(keep);
 }

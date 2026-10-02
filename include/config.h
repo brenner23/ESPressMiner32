@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 #define MINER_NAME        "ESPressMiner32"
-#define MINER_VERSION     "1.0.0"
+#define MINER_VERSION     "1.1.0"
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
 // Difficulty, die beim Pool angefragt wird (mining.suggest_difficulty).
@@ -38,8 +38,16 @@
 
 // Sicherheitsabstand (CPU-Takte) auf die beim Start gemessenen Grenzwerte
 // der Hardware-Pipeline. Kleiner = schneller, groesser = mehr Reserve.
-#define HW_CAL_MARGIN_BLOCK      2
-#define HW_CAL_MARGIN_LOAD       2
+#define HW_CAL_MARGIN_BLOCK      1
+#define HW_CAL_MARGIN_LOAD       1
+
+// Hash-Schleife in Assembler (src/hw_scan_asm.S) statt C. 0 = C-Version
+// Gemessen: Assembler 255 Takte/Hash, C 249. Die dichter gepackten Writes stauen
+// sich am Bus (jeder Takt Pause nach START kostet genau einen Takt) -> C bleibt aktiv.
+#define HW_USE_ASM               0
+// Zusaetzliche Takte zwischen START von Block 1 und dem ersten Block-2-Write
+// (die Engine liest T[0..7] erst nach START ein). Die Kalibrierung prueft das mit.
+#define HW_ASM_LOOP_GUARD        0
 
 // mDNS-Name (Standard fuer den Hostnamen)  ->  http://espressminer.local
 #define WEB_MDNS_NAME            "espressminer"

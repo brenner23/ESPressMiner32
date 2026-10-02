@@ -6,7 +6,7 @@ A Bitcoin Stratum (V1) miner for the **classic ESP32**. It drives the **SHA-256 
 through direct register access with a pipeline: the data for the next block is written while the engine
 is still computing.
 
-Measured on ESP32-D0WD-V3 @ 240 MHz: **~902 kH/s** (265 cycles per double SHA-256).
+Measured on ESP32-D0WD-V3 @ 240 MHz: **~960 kH/s** (249 cycles per double SHA-256), version 1.1.0.
 
 🔗 **Project page:** https://github.com/brenner23/ESPressMiner32
 
@@ -15,11 +15,22 @@ Measured on ESP32-D0WD-V3 @ 240 MHz: **~902 kH/s** (265 cycles per double SHA-25
 >
 > The web UI, setup tools and serial output are in German.
 
+## Versions
+
+| Version | kH/s | Cycles/hash | What's new |
+|---|---|---|---|
+| **1.1.0** (current) | **~960** | 249 | Cycle-exact wait loops, calibration checks the real mining loop (fixes a bug in 1.0.0), more robust calibration |
+| 1.0.0 | ~902 | 265 | First release |
+
+Every version is a fixed Git tag. For an older version pick **"main ▾" → Tags** at the top (or `git checkout v1.0.0`)
+and flash as usual. Settings (Wi-Fi, pools) survive the switch.
+There are intentionally no prebuilt firmware files: you flash what you can read in the source.
+
 ---
 
 ## Features
 
-- **~902 kH/s** on a classic ESP32 (hardware SHA, calibrated pipeline)
+- **~960 kH/s** on a classic ESP32 (hardware SHA, calibrated pipeline)
 - **Self-test** at boot (genesis block, 2000 random headers, 5000 nonces). If it fails, the miner does not mine.
 - **Every hit is re-checked in software** before a share is sent to the pool
 - **Web dashboard** at `http://espressminer.local/` with hashrate history, JSON at `/api/stats`
@@ -41,8 +52,10 @@ ESPressMiner32/
 │   ├── mining_job.h          Job/share exchange between tasks
 │   └── ...
 ├── src/                      Implementations + main.cpp
+├── src/hw_scan_asm.S         Hash loop in assembly (experiment, disabled: HW_USE_ASM)
 ├── tools/                    USB setup: espressminer_setup_gui.py (GUI), espressminer_setup.py
-└── test/hw_probe/            Measurement firmware for the SHA accelerator (development)
+├── test/hw_probe/            Measurement firmware for the SHA accelerator (development)
+└── test/pipe_probe/          Measurement firmware for the pipeline since 1.1.0 (development)
 ```
 
 ## Build & flash (VS Code + PlatformIO)
@@ -110,15 +123,35 @@ python tools/espressminer_setup.py --reset         # erase settings -> portal
 | Fixed wait times instead of BUSY (the flag lags ~34 cycles) | ~800 |
 | No `memw` after LOAD | ~833 |
 | Wait time calibrated per phase | ~842 |
-| Software pipeline: start the next block 1 before the candidate check | **~902** |
+| Software pipeline: start the next block 1 before the candidate check | ~902 (v1.0.0) |
+| Cycle-exact counting loop (`loopnez`) instead of polling the cycle counter, separate LOAD times | **~960** (v1.1.0) |
 
-The wait times are **calibrated at every boot**: the ESP32 searches for the smallest error-free wait time and
-adds `HW_CAL_MARGIN_*` cycles of headroom. If the hardware miscalculates during operation (every hit is
-re-checked in software), the wait time is increased automatically.
+The wait times are **calibrated at every boot**: the ESP32 binary-searches the smallest error-free wait time per
+phase (to the cycle) and adds `HW_CAL_MARGIN_*` cycles of headroom. It tests exactly the loop that mines.
+A test step only counts as too tight after failing twice, and calibration gets up to three attempts before slow
+fallback values are used. The wait times are not changed during operation.
+
+A hash loop in assembly is included (`src/hw_scan_asm.S`) but is slower (255 cycles): from here on the bus to the
+SHA block (about 40 accesses per hash) is the limit, not the code.
 
 The classic ESP32 cannot load a SHA midstate back into the engine, so every nonce always needs three hardware blocks.
 
-Measurement tool: `pio run -e hw_probe -t upload` (register access costs, engine timings, phase profile).
+Measurement tools: `pio run -e hw_probe -t upload` (register access costs, engine timings) and
+`pio run -e pipe_probe -t upload` (wait times and pipeline variants since 1.1.0).
+
+## Calculation errors, honestly
+
+To reach this speed the SHA block is **not driven by the datasheet**: data is written while it is still
+computing, and fixed measured wait times are used instead of its BUSY signal. As a result it occasionally
+miscalculates.
+
+- **Measured (v1.1.0, 17 million checked hashes, Wi-Fi active): about 1 wrong hash per 17,000, i.e. ~0.006 %.**
+  The rate stayed stable over time. More wait-time headroom does not lower it; the likely cause is Wi-Fi traffic
+  on the shared bus.
+- **A wrong hash never reaches the pool.** Every hit is recomputed in software first.
+- The dashboard's "verworfen (Rechenfehler)" (discarded, calculation error) only shows wrong hashes that happen to
+  look like a hit (about one in 65,536), at ~960 kH/s roughly one every 20 minutes on average.
+- Effect on earnings: ~0.006 %, i.e. not measurable.
 
 ## Development
 

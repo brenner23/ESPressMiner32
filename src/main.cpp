@@ -90,9 +90,13 @@ void setup()
     serial_config_start();      // Konfiguration per serieller Konsole ist immer moeglich
 
     hw_sha_begin();
-    if (!selftest_calibrate()) {
+    // Einzelne Fehlversuche kommen vor (beobachtet in Master 002); die
+    // Notwerte kosten ~60 % Hashrate, daher mehrmals versuchen.
+    bool calibrated = false;
+    for (int attempt = 0; attempt < 3 && !calibrated; attempt++) calibrated = selftest_calibrate();
+    if (!calibrated) {
         Serial.println("KALIBRIERUNG FEHLGESCHLAGEN - sichere Standardwerte werden genutzt.");
-        hw_sha_set_timing(HwTiming{ { 120, 120, 120 }, 40 });
+        hw_sha_set_timing(HW_TIMING_SAFE);
     }
     if (!selftest_run()) {
         Serial.println("SELBSTTEST FEHLGESCHLAGEN - Mining wird nicht gestartet.");
@@ -119,6 +123,15 @@ void setup()
 
     xTaskCreatePinnedToCore(stratum_task, "stratum", 12288, nullptr, 3, nullptr, 0);
     xTaskCreatePinnedToCore(stats_task, "stats", 4096, nullptr, 2, nullptr, 0);
+#ifdef HW_MARGIN_SWEEP
+    delay(3000);                // Pool-Verbindung aufbauen lassen (WLAN-Verkehr)
+    selftest_margin_sweep();
+#endif
+#ifdef HW_LONG_TEST
+    delay(3000);
+    selftest_long_test(0, 10);
+    selftest_long_test(1, 10);
+#endif
     xTaskCreatePinnedToCore(miner::hw_task, "minerHW", 4096, nullptr, 2, nullptr, HW_MINER_CORE);
 #if ENABLE_SW_MINER
     xTaskCreatePinnedToCore(miner::sw_task, "minerSW", 4096, nullptr, 1, nullptr, SW_MINER_CORE);

@@ -6,18 +6,29 @@ Ein Bitcoin-Stratum-Miner (V1) für den **klassischen ESP32**. Er nutzt den **SH
 per direktem Registerzugriff mit einer Pipeline: Die Daten für den nächsten Block werden geschrieben,
 während die Engine noch rechnet.
 
-Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~902 kH/s** (265 Takte pro Double-SHA256).
+Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~960 kH/s** (249 Takte pro Double-SHA256), Version 1.1.0.
 
 🔗 **Projektseite:** https://github.com/brenner23/ESPressMiner32
 
 > ⚠️ **Hobbyprojekt.** Mit einem ESP32 findet man realistisch keinen Bitcoin-Block. Es geht ums Lernen,
 > Basteln und Ausreizen der Hardware. Ideal für Solo-Pools, Lotterie-Mining oder den eigenen Test-Pool.
 
+## Versionen
+
+| Version | kH/s | Takte/Hash | Was ist neu |
+|---|---|---|---|
+| **1.1.0** (aktuell) | **~960** | 249 | Taktgenaue Warteschleifen, Kalibrierung prüft die echte Mining-Schleife (behebt einen Fehler aus 1.0.0), robustere Kalibrierung |
+| 1.0.0 | ~902 | 265 | Erste Version |
+
+Jede Version ist ein fester Git-Tag. Ältere Versionen: oben im Auswahlfeld **„main ▾“ → Tags** wählen
+(oder `git checkout v1.0.0`) und wie gewohnt flashen. Die Einstellungen (WLAN, Pools) bleiben beim Wechsel erhalten.
+Es gibt bewusst keine fertigen Firmware-Dateien: Geflasht wird, was man im Quellcode nachlesen kann.
+
 ---
 
 ## Funktionen
 
-- **~902 kH/s** auf einem klassischen ESP32 (Hardware-SHA, kalibrierte Pipeline)
+- **~960 kH/s** auf einem klassischen ESP32 (Hardware-SHA, kalibrierte Pipeline)
 - **Selbsttest** beim Start (Genesis-Block, 2000 Zufalls-Header, 5000 Nonces). Schlägt er fehl, wird nicht gemint.
 - **Jeder Treffer wird in Software nachgerechnet**, bevor ein Share zum Pool geht
 - **Web-Dashboard** unter `http://espressminer.local/` mit Hashrate-Verlauf, JSON unter `/api/stats`
@@ -39,8 +50,10 @@ ESPressMiner32/
 │   ├── mining_job.h          Job-/Share-Austausch zwischen den Tasks
 │   └── ...
 ├── src/                      Implementierungen zu den Headern + main.cpp
+├── src/hw_scan_asm.S         Hash-Schleife in Assembler (Versuch, abgeschaltet: HW_USE_ASM)
 ├── tools/                    Setup per USB: espressminer_setup_gui.py (Oberfläche), espressminer_setup.py
-└── test/hw_probe/            Messprogramm für den SHA-Beschleuniger (Entwicklung)
+├── test/hw_probe/            Messprogramm für den SHA-Beschleuniger (Entwicklung)
+└── test/pipe_probe/          Messprogramm für die Pipeline ab 1.1.0 (Entwicklung)
 ```
 
 ## Bauen & Flashen (VS Code + PlatformIO)
@@ -108,16 +121,37 @@ python tools/espressminer_setup.py --reset         # Einstellungen löschen -> P
 | Feste Wartezeiten statt BUSY (das Flag hängt ~34 Takte nach) | ~800 |
 | Kein `memw` nach LOAD | ~833 |
 | Wartezeit je Phase einzeln kalibriert | ~842 |
-| Software-Pipeline: nächsten Block 1 vor der Kandidatenprüfung starten | **~902** |
+| Software-Pipeline: nächsten Block 1 vor der Kandidatenprüfung starten | ~902 (v1.0.0) |
+| Taktgenaue Zählschleife (`loopnez`) statt Abfrage der Taktuhr, LOAD-Zeiten getrennt | **~960** (v1.1.0) |
 
-Die Wartezeiten werden bei jedem Start **kalibriert**: Der ESP32 sucht die kleinste fehlerfreie Wartezeit und
-schlägt `HW_CAL_MARGIN_*` Takte Reserve drauf. Rechnet die Hardware im Betrieb falsch (jeder Treffer wird in
-Software nachgeprüft), erhöht sich die Wartezeit automatisch.
+Die Wartezeiten werden bei jedem Start **kalibriert**: Der ESP32 sucht per Binärsuche die kleinste fehlerfreie
+Wartezeit je Phase (auf 1 Takt genau) und schlägt `HW_CAL_MARGIN_*` Takte Reserve drauf. Geprüft wird dabei
+genau die Schleife, die auch mint. Ein Prüfschritt gilt erst nach zweimaligem Durchfallen als zu knapp, und die
+Kalibrierung hat bis zu drei Anläufe. Erst danach greifen langsame Notwerte. Im laufenden Betrieb werden die
+Wartezeiten nicht mehr verändert.
+
+Eine Hash-Schleife in Assembler liegt bei (`src/hw_scan_asm.S`), ist aber langsamer (255 Takte): Ab hier begrenzt
+der Bus zum SHA-Baustein (rund 40 Zugriffe pro Hash), nicht mehr der Code.
 
 Der klassische ESP32 kann keinen SHA-Zwischenstand (Midstate) in die Engine zurückladen. Pro Nonce sind deshalb
 immer drei Hardware-Blöcke nötig.
 
-Messwerkzeug: `pio run -e hw_probe -t upload` (misst Registerzugriffe, Engine-Zeiten, Phasenprofil).
+Messwerkzeuge: `pio run -e hw_probe -t upload` (Registerzugriffe, Engine-Zeiten) und
+`pio run -e pipe_probe -t upload` (Wartezeiten und Varianten der Pipeline ab 1.1.0).
+
+## Rechenfehler, ehrlich gesagt
+
+Um diese Geschwindigkeit zu erreichen, wird der SHA-Baustein **nicht nach Datenblatt** betrieben: Die Daten
+werden geschrieben, während er noch rechnet, und statt auf sein BUSY-Signal zu warten, gelten fest gemessene
+Wartezeiten. Dadurch rechnet er gelegentlich falsch.
+
+- **Gemessen (v1.1.0, 17 Mio. geprüfte Hashes, WLAN aktiv): etwa 1 falscher Hash je 17.000, also ~0,006 %.**
+  Die Quote blieb über die Zeit stabil. Mehr Reserve bei den Wartezeiten senkt sie nicht. Ursache ist vermutlich
+  der WLAN-Verkehr auf dem gemeinsamen Bus.
+- **Ein falscher Hash geht nie an den Pool.** Jeder Treffer wird vorher in Software nachgerechnet.
+- Das Dashboard zeigt unter „verworfen (Rechenfehler)“ nur die falschen Hashes, die zufällig wie ein Treffer
+  aussehen (etwa einer von 65.536), bei ~960 kH/s im Schnitt ungefähr einer alle 20 Minuten.
+- Auswirkung auf den Ertrag: ~0,006 %, also nicht messbar.
 
 ## Entwicklung
 
