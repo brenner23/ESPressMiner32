@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 #define MINER_NAME        "ESPressMiner32"
-#define MINER_VERSION     "1.1.0"
+#define MINER_VERSION     "1.2.0"   // Master 003: v2-Hash-Schleife
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
 // Difficulty, die beim Pool angefragt wird (mining.suggest_difficulty).
@@ -23,7 +23,7 @@
 #define HW_MINER_CORE            1
 #define SW_MINER_CORE            0
 // Aus: Der SW-Miner bringt nur ~24 kH/s, bremst aber den HW-Miner ueber den
-// gemeinsamen Bus um ~95 kH/s (gemessen: 486 kH/s mit, 557 kH/s ohne).
+// gemeinsamen Bus um ~95 kH/s (gemessen mit der Schleife aus Master 002).
 #define ENABLE_SW_MINER          0
 
 // Nonce-Aufteilung zwischen Hardware- und Software-Miner
@@ -44,6 +44,8 @@
 // Hash-Schleife in Assembler (src/hw_scan_asm.S) statt C. 0 = C-Version
 // Gemessen: Assembler 255 Takte/Hash, C 249. Die dichter gepackten Writes stauen
 // sich am Bus (jeder Takt Pause nach START kostet genau einen Takt) -> C bleibt aktiv.
+// Hinweis Master 003: hw_scan_asm.S zaehlt die Nonce noch byte-getauscht und passt
+// nicht mehr zur T[3]-Wort-Zaehlung -> nicht einschalten.
 #define HW_USE_ASM               0
 // Zusaetzliche Takte zwischen START von Block 1 und dem ersten Block-2-Write
 // (die Engine liest T[0..7] erst nach START ein). Die Kalibrierung prueft das mit.

@@ -9,6 +9,8 @@
 #include <sha/sha_parallel_engine.h>
 #include <xtensa/core-macros.h>
 #include <stddef.h>
+#include <string.h>
+#include <hal/efuse_hal.h>
 
 // Register-Offsets relativ zu SHA_TEXT_BASE (0x3FF03000):
 //   0x00..0x3C Textpuffer T[0..15], 0x90 START, 0x94 CONTINUE, 0x98 LOAD, 0x9C BUSY
@@ -243,7 +245,7 @@ static_assert(offsetof(HwScanArgs, b1) == 0 && offsetof(HwScanArgs, b2) == 4 &&
 extern "C" uint32_t hw_scan_asm(HwScanArgs* a);
 
 #if HW_USE_ASM
-uint32_t IRAM_ATTR hw_scan(const uint32_t blk1[16], const uint32_t blk2[3],
+static uint32_t IRAM_ATTR hw_scan_classic(const uint32_t blk1[16], const uint32_t blk2[3],
                            uint32_t nonce, uint32_t count, uint32_t mask,
                            uint32_t* cands, int maxCands, int* nCands)
 {
@@ -256,7 +258,7 @@ uint32_t IRAM_ATTR hw_scan(const uint32_t blk1[16], const uint32_t blk2[3],
 }
 #else
 __attribute__((optimize("O3")))
-uint32_t IRAM_ATTR hw_scan(const uint32_t blk1[16], const uint32_t blk2[3],
+static uint32_t IRAM_ATTR hw_scan_classic(const uint32_t blk1[16], const uint32_t blk2[3],
                            uint32_t nonce, uint32_t count, uint32_t mask,
                            uint32_t* cands, int maxCands, int* nCands)
 {
@@ -269,7 +271,7 @@ uint32_t IRAM_ATTR hw_scan(const uint32_t blk1[16], const uint32_t blk2[3],
 
     uint32_t tStart = hw_pipe_prime(T, blk1);
     for (uint32_t i = 0; i < count; i++, nonce++) {
-        uint32_t h7 = hw_pipe_step(T, blk1, blk2, __builtin_bswap32(nonce), pad, zero, d0, d1, d2, l1, l2, tStart);
+        uint32_t h7 = hw_pipe_step(T, blk1, blk2, nonce, pad, zero, d0, d1, d2, l1, l2, tStart);
         if ((h7 & mask) == 0 && found < maxCands) cands[found++] = nonce;
     }
     *nCands = found;
@@ -282,3 +284,134 @@ void hw_sha_set_timing(const HwTiming& t) { s_timing = t; }
 HwTiming hw_sha_timing() { return s_timing; }
 
 void hw_sha_set_guard(uint32_t g) { s_guard = g; }
+
+// ---------------------------------------------------------------------------
+//  Master 003: Hash-Schleife v2 (src/hw_scan_v2.S, aus NerdMiner Modded, MIT)
+// ---------------------------------------------------------------------------
+
+// Layout passend zu den CTX_*-Offsets in hw_scan_v2.S
+struct HwV2Ctx {
+    uint32_t hdr[19];       // Header-Woerter 0..18 (Big-Endian-Werte)
+    uint32_t pad1;
+    uint32_t nonce;         // naechstes T[3]-Wort
+    uint32_t budget;        // verbleibende Nonces
+    uint32_t run;           // 0 = sofort aufhoeren
+    uint32_t pad;           // 0x80000000
+};
+static_assert(offsetof(HwV2Ctx, nonce) == 80 && offsetof(HwV2Ctx, budget) == 84 &&
+              offsetof(HwV2Ctx, run) == 88 && offsetof(HwV2Ctx, pad) == 92,
+              "Offsets passen nicht zu hw_scan_v2.S");
+
+typedef uint32_t (*HwV2Fn)(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_v2_fast(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_v2_margin(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_v2_wide(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+
+static const struct { HwV2Fn fn; const char* name; } s_v2[] = {
+    { hw_v2_fast,   "v2 schnell (247 Takte)" },
+    { hw_v2_margin, "v2 +2 Reserve (257 Takte)" },
+    { hw_v2_wide,   "v2 breite Reserve (317 Takte)" },
+};
+static const int V2_COUNT = sizeof(s_v2) / sizeof(s_v2[0]);
+static int s_v2Loop = -1;                  // -1 = klassische Schleife (Master 002)
+static volatile int s_v2Switches = 0;
+
+static uint32_t IRAM_ATTR hw_scan_v2(HwV2Fn fn, const uint32_t blk1[16], const uint32_t blk2[3],
+                                     uint32_t nonce, uint32_t count,
+                                     uint32_t* cands, int maxCands, int* nCands)
+{
+    static HwV2Ctx c;      // nur von einem Task gleichzeitig benutzt (HW-Miner bzw. Setup)
+    memcpy(c.hdr, blk1, 64);
+    c.hdr[16] = blk2[0]; c.hdr[17] = blk2[1]; c.hdr[18] = blk2[2];
+    c.nonce = nonce;
+    c.budget = count;
+    c.run = 1;
+    c.pad = 0x80000000u;
+    int found = 0;
+    while (c.budget > 0 && fn((volatile uint32_t*)SHA_TEXT_BASE, &c)) {
+        if (found < maxCands) cands[found++] = c.nonce - 1;
+    }
+    *nCands = found;
+    return count;
+}
+
+uint32_t IRAM_ATTR hw_scan(const uint32_t blk1[16], const uint32_t blk2[3],
+                           uint32_t nonce, uint32_t count, uint32_t mask,
+                           uint32_t* cands, int maxCands, int* nCands)
+{
+    // v2 prueft fest die unteren 16 Bit; andere Masken (Kalibrierung/Selbsttest
+    // der klassischen Schleife) laufen ueber die klassische Schleife.
+    const int sel = s_v2Loop;
+    if (sel >= 0 && mask == HW_CAND_MASK)
+        return hw_scan_v2(s_v2[sel].fn, blk1, blk2, nonce, count, cands, maxCands, nCands);
+    return hw_scan_classic(blk1, blk2, nonce, count, mask, cands, maxCands, nCands);
+}
+
+// Known-Answer-Test: Header-Wort i = 0x9E3779B9 * (i + 1), Nonces (T[3]-Wort)
+// 0x1000 .. 0x1000+262143. Genau diese 6 Kandidaten (in Python nachgerechnet).
+// Ein einziger falscher Hash, der zufaellig Kandidat wird oder einen versteckt,
+// laesst ihn scheitern.
+static bool v2_selftest(HwV2Fn fn)
+{
+    static const uint32_t expected[] = { 0xa94c, 0xe496, 0x1f476, 0x302f0, 0x35af9, 0x3cf5c };
+    const int nExp = sizeof(expected) / sizeof(expected[0]);
+    const uint32_t first = 0x1000;
+    uint32_t b1[16], b2[3], cands[8];
+    for (int i = 0; i < 16; i++) b1[i] = 0x9E3779B9u * (i + 1);
+    for (int i = 0; i < 3; i++)  b2[i] = 0x9E3779B9u * (i + 17);
+    int nc = 0;
+    hw_scan_v2(fn, b1, b2, first, 262144, cands, 8, &nc);
+    if (nc != nExp) return false;
+    for (int i = 0; i < nExp; i++)
+        if (cands[i] - first != expected[i]) return false;
+    return true;
+}
+
+bool hw_sha_select_loop()
+{
+    const unsigned rev = efuse_hal_get_major_chip_version();
+    if (rev < 3) {
+        // Rev. 0-2: DPORT-Fehler (lesen ohne Schutz stoert den anderen Kern)
+        Serial.printf("[HW-SHA] Chip-Revision %u: v2-Schleife braucht Rev. 3 -> klassische Schleife\n", rev);
+        s_v2Loop = -1;
+        return false;
+    }
+    for (int n = 0; n < V2_COUNT; n++) {
+        // Bester aus drei: ein einzelner Ausreisser soll die schnelle Stufe nicht kosten
+        for (int tries = 0; tries < 3; tries++) {
+            uint32_t t0 = millis();
+            bool ok = v2_selftest(s_v2[n].fn);
+            Serial.printf("  Schleife %-30s Known-Answer-Test %s (%lu ms)\n", s_v2[n].name,
+                          ok ? "OK" : "FEHLER", (unsigned long)(millis() - t0));
+            if (ok) {
+                s_v2Loop = n;
+                return true;
+            }
+        }
+    }
+    s_v2Loop = -1;
+    return false;
+}
+
+// Jeder Kandidat wird in Software nachgerechnet. Werden davon zu viele nicht
+// bestaetigt, ist die Stufe auf diesem Chip zu knapp -> naechste, vorsichtigere.
+void hw_sha_report_candidate(bool confirmed)
+{
+    static uint32_t hits = 0, bad = 0;
+    if (s_v2Loop < 0) return;
+    hits++;
+    if (!confirmed) bad++;
+    if (hits < 256) return;
+    if (bad >= 8 && s_v2Loop + 1 < V2_COUNT) {
+        s_v2Loop++;
+        s_v2Switches++;
+        Serial.printf("[HW-SHA] %lu von %lu Kandidaten falsch -> wechsle auf %s\n",
+                      (unsigned long)bad, (unsigned long)hits, s_v2[s_v2Loop].name);
+    }
+    hits = bad = 0;
+}
+
+const char* hw_sha_loop_name()
+{
+    return s_v2Loop >= 0 ? s_v2[s_v2Loop].name : "klassisch (Master 002, kalibriert)";
+}

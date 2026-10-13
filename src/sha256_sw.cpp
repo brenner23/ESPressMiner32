@@ -126,7 +126,7 @@ uint32_t IRAM_ATTR sw_scan(const uint32_t midstate[8], const uint32_t blk2[3],
     int found = 0;
 
     for (uint32_t i = 0; i < count; i++, nonce++) {
-        w1[3] = __builtin_bswap32(nonce);
+        w1[3] = nonce;                  // T[3]-Wort, echte Nonce = bswap32
 
         uint32_t s[8];
         memcpy(s, midstate, 32);

@@ -46,7 +46,7 @@ static int pipeline_mismatches(uint32_t n)
     int mismatches = 0, k = 0;
     for (uint32_t i = 0; i < n; i++) {
         uint32_t s[8];
-        w1[3] = __builtin_bswap32(start + i);
+        w1[3] = start + i;              // T[3]-Wort, siehe hw_scan
         memcpy(s, mid, 32);
         sha256_transform(s, w1);
         memcpy(w2, s, 32);
@@ -183,7 +183,7 @@ bool selftest_run()
     for (int i = 0; i < 3; i++)  b2[i] = read_be32(header + 64 + 4 * i);
     memcpy(mid, SHA256_H0, 32);
     sha256_transform(mid, b1);
-    uint32_t genesisNonce = 0x7c2bac1d;
+    uint32_t genesisNonce = __builtin_bswap32(0x7c2bac1du);   // als T[3]-Wort
     uint32_t cands[8];
     int nc = 0;
     sw_scan(mid, b2, genesisNonce - 2, 4, cands, 8, &nc);

@@ -6,7 +6,7 @@ A Bitcoin Stratum (V1) miner for the **classic ESP32**. It drives the **SHA-256 
 through direct register access with a pipeline: the data for the next block is written while the engine
 is still computing.
 
-Measured on ESP32-D0WD-V3 @ 240 MHz: **~960 kH/s** (249 cycles per double SHA-256), version 1.1.0.
+Measured on ESP32-D0WD-V3 @ 240 MHz: **~963 kH/s** (247 cycles per double SHA-256), version 1.2.0.
 
 🔗 **Project page:** https://github.com/brenner23/ESPressMiner32
 
@@ -19,7 +19,8 @@ Measured on ESP32-D0WD-V3 @ 240 MHz: **~960 kH/s** (249 cycles per double SHA-25
 
 | Version | kH/s | Cycles/hash | What's new |
 |---|---|---|---|
-| **1.1.0** (current) | **~960** | 249 | Cycle-exact wait loops, calibration checks the real mining loop (fixes a bug in 1.0.0), more robust calibration |
+| **1.2.0** (current) | **~963** | 247 | New "v2" hash loop from [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), known-answer test at boot, automatic fallback stages |
+| 1.1.0 | ~960 | 249 | Cycle-exact wait loops, calibration checks the real mining loop (fixes a bug in 1.0.0), more robust calibration |
 | 1.0.0 | ~902 | 265 | First release |
 
 Every version is a fixed Git tag. For an older version pick **"main ▾" → Tags** at the top (or `git checkout v1.0.0`)
@@ -30,7 +31,7 @@ There are intentionally no prebuilt firmware files: you flash what you can read 
 
 ## Features
 
-- **~960 kH/s** on a classic ESP32 (hardware SHA, calibrated pipeline)
+- **~963 kH/s** on a classic ESP32 (hardware SHA pipeline)
 - **Self-test** at boot (genesis block, 2000 random headers, 5000 nonces). If it fails, the miner does not mine.
 - **Every hit is re-checked in software** before a share is sent to the pool
 - **Web dashboard** at `http://espressminer.local/` with hashrate history, JSON at `/api/stats`
@@ -110,7 +111,7 @@ python tools/espressminer_setup.py --reset         # erase settings -> portal
 
 - **Settings** (gear icon in the dashboard): hostname, Wi-Fi, primary and secondary pool, stored in flash (NVS).
   After 3 failed attempts the miner switches to the other pool; from the secondary it retries the primary every 10 minutes.
-- The dashboard runs on core 0 and costs no hashrate.
+- The dashboard runs on core 0. It costs no measurable hashrate.
 
 ## Where the hashrate comes from
 
@@ -124,9 +125,25 @@ python tools/espressminer_setup.py --reset         # erase settings -> portal
 | No `memw` after LOAD | ~833 |
 | Wait time calibrated per phase | ~842 |
 | Software pipeline: start the next block 1 before the candidate check | ~902 (v1.0.0) |
-| Cycle-exact counting loop (`loopnez`) instead of polling the cycle counter, separate LOAD times | **~960** (v1.1.0) |
+| Cycle-exact counting loop (`loopnez`) instead of polling the cycle counter, separate LOAD times | ~960 (v1.1.0) |
+| "v2" hash loop from NerdMiner Modded: counted delays, everything except T[0..7] hidden in engine time | **~963** (v1.2.0) |
 
-The wait times are **calibrated at every boot**: the ESP32 binary-searches the smallest error-free wait time per
+### Since 1.2.0: "v2" hash loop (source: NerdMiner Modded)
+
+`src/hw_scan_v2.S` is a port of the loop `pipelined_hw_sha_classic_v2.S` from
+[NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) by HenrysCat
+([project page](https://henryscat.github.io/NerdMiner-Modded/), MIT license, license text in
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)). The delays measured there are taken over unchanged.
+The key insight from that project: **stores to the SHA registers must be at least 3 cycles apart**, otherwise they
+are lost whenever the other core accesses the bus at the same time. This also explains why the software miner slowed
+the hardware down by ~95 kH/s in 1.1.0.
+
+At boot a **known-answer test** (262,144 nonces, exactly 6 known hits, independently recomputed in Python) checks
+the fast stage. If it fails, +2 cycles of headroom follow, then wide headroom, and finally the calibrated loop from
+1.1.0. Chips before revision 3 always get the classic loop (DPORT silicon bug). During operation the miner keeps
+count: if software does not confirm 8 or more of 256 hardware hits, it switches to the next, more careful stage by itself.
+
+Up to 1.1.0 (and as the last fallback stage) the wait times are **calibrated at every boot**: the ESP32 binary-searches the smallest error-free wait time per
 phase (to the cycle) and adds `HW_CAL_MARGIN_*` cycles of headroom. It tests exactly the loop that mines.
 A test step only counts as too tight after failing twice, and calibration gets up to three attempts before slow
 fallback values are used. The wait times are not changed during operation.
@@ -140,6 +157,10 @@ Measurement tools: `pio run -e hw_probe -t upload` (register access costs, engin
 `pio run -e pipe_probe -t upload` (wait times and pipeline variants since 1.1.0).
 
 ## Calculation errors, honestly
+
+**Since 1.2.0 (v2 loop):** known-answer test passed, shares accepted. A longer burn-in test follows with 1.2.1.
+
+### Up to 1.1.0
 
 To reach this speed the SHA block is **not driven by the datasheet**: data is written while it is still
 computing, and fixed measured wait times are used instead of its BUSY signal. As a result it occasionally

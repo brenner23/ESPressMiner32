@@ -1,3 +1,4 @@
+#include "sha256_hw.h"
 #include "web_server.h"
 #include "config.h"
 #include "settings.h"
@@ -31,6 +32,10 @@ static void handle_stats()
     doc["submitted"]   = g_stats.submitted;
     doc["rejected"]    = g_stats.rejected;
     doc["hwErrors"]    = g_stats.hwErrors;
+    doc["candidates"]  = g_stats.candidates;   // 16-Bit-Kandidaten (Echtheits-Check: ~Hashes/65536)
+    doc["hwHashes"]    = (double)g_stats.hwHashes;
+    doc["swHashes"]    = (double)g_stats.swHashes;
+    doc["hwLoop"]      = hw_sha_loop_name();
     doc["bestDiff"]    = g_stats.bestDiff;
     doc["poolDiff"]    = jobs::difficulty();
     doc["netDiff"]     = g_stats.networkDiff;

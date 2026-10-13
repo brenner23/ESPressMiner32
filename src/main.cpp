@@ -90,11 +90,16 @@ void setup()
     serial_config_start();      // Konfiguration per serieller Konsole ist immer moeglich
 
     hw_sha_begin();
+    // Master 003: zuerst die v2-Schleife (NerdMiner Modded) pruefen. Besteht sie,
+    // wird die klassische Schleife nicht kalibriert (spart Startzeit).
+    Serial.println("[Hash-Schleife]");
+    const bool v2 = hw_sha_select_loop();
+    Serial.printf("[HW-SHA] aktiv: %s\n", hw_sha_loop_name());
     // Einzelne Fehlversuche kommen vor (beobachtet in Master 002); die
     // Notwerte kosten ~60 % Hashrate, daher mehrmals versuchen.
     bool calibrated = false;
-    for (int attempt = 0; attempt < 3 && !calibrated; attempt++) calibrated = selftest_calibrate();
-    if (!calibrated) {
+    for (int attempt = 0; attempt < 3 && !calibrated && !v2; attempt++) calibrated = selftest_calibrate();
+    if (!calibrated && !v2) {
         Serial.println("KALIBRIERUNG FEHLGESCHLAGEN - sichere Standardwerte werden genutzt.");
         hw_sha_set_timing(HW_TIMING_SAFE);
     }

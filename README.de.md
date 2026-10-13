@@ -6,7 +6,7 @@ Ein Bitcoin-Stratum-Miner (V1) für den **klassischen ESP32**. Er nutzt den **SH
 per direktem Registerzugriff mit einer Pipeline: Die Daten für den nächsten Block werden geschrieben,
 während die Engine noch rechnet.
 
-Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~960 kH/s** (249 Takte pro Double-SHA256), Version 1.1.0.
+Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~963 kH/s** (247 Takte pro Double-SHA256), Version 1.2.0.
 
 🔗 **Projektseite:** https://github.com/brenner23/ESPressMiner32
 
@@ -17,7 +17,8 @@ Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~960 kH/s** (249 Takte pro Double-SHA256
 
 | Version | kH/s | Takte/Hash | Was ist neu |
 |---|---|---|---|
-| **1.1.0** (aktuell) | **~960** | 249 | Taktgenaue Warteschleifen, Kalibrierung prüft die echte Mining-Schleife (behebt einen Fehler aus 1.0.0), robustere Kalibrierung |
+| **1.2.0** (aktuell) | **~963** | 247 | Neue Hash-Schleife „v2“ aus [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), Known-Answer-Test beim Start, automatische Rückfallstufen |
+| 1.1.0 | ~960 | 249 | Taktgenaue Warteschleifen, Kalibrierung prüft die echte Mining-Schleife (behebt einen Fehler aus 1.0.0), robustere Kalibrierung |
 | 1.0.0 | ~902 | 265 | Erste Version |
 
 Jede Version ist ein fester Git-Tag. Ältere Versionen: oben im Auswahlfeld **„main ▾“ → Tags** wählen
@@ -28,7 +29,7 @@ Es gibt bewusst keine fertigen Firmware-Dateien: Geflasht wird, was man im Quell
 
 ## Funktionen
 
-- **~960 kH/s** auf einem klassischen ESP32 (Hardware-SHA, kalibrierte Pipeline)
+- **~963 kH/s** auf einem klassischen ESP32 (Hardware-SHA-Pipeline)
 - **Selbsttest** beim Start (Genesis-Block, 2000 Zufalls-Header, 5000 Nonces). Schlägt er fehl, wird nicht gemint.
 - **Jeder Treffer wird in Software nachgerechnet**, bevor ein Share zum Pool geht
 - **Web-Dashboard** unter `http://espressminer.local/` mit Hashrate-Verlauf, JSON unter `/api/stats`
@@ -108,7 +109,7 @@ python tools/espressminer_setup.py --reset         # Einstellungen löschen -> P
 
 - **Einstellungen** (Zahnrad im Dashboard): Hostname, WLAN, Primary- und Secondary-Pool, gespeichert im Flash (NVS).
   Nach 3 Fehlversuchen wechselt der Miner zum anderen Pool, vom Secondary aus wird alle 10 Minuten der Primary erneut versucht.
-- Das Dashboard läuft auf Core 0 und kostet keine Hashrate.
+- Das Dashboard läuft auf Core 0. Es kostet keine messbare Hashrate.
 
 ## Wie die Hashrate zustande kommt
 
@@ -122,9 +123,26 @@ python tools/espressminer_setup.py --reset         # Einstellungen löschen -> P
 | Kein `memw` nach LOAD | ~833 |
 | Wartezeit je Phase einzeln kalibriert | ~842 |
 | Software-Pipeline: nächsten Block 1 vor der Kandidatenprüfung starten | ~902 (v1.0.0) |
-| Taktgenaue Zählschleife (`loopnez`) statt Abfrage der Taktuhr, LOAD-Zeiten getrennt | **~960** (v1.1.0) |
+| Taktgenaue Zählschleife (`loopnez`) statt Abfrage der Taktuhr, LOAD-Zeiten getrennt | ~960 (v1.1.0) |
+| Hash-Schleife „v2“ aus NerdMiner Modded: Wartezeiten gezählt, alles außer T[0..7] in Rechenzeit der Engine | **~963** (v1.2.0) |
 
-Die Wartezeiten werden bei jedem Start **kalibriert**: Der ESP32 sucht per Binärsuche die kleinste fehlerfreie
+### Ab 1.2.0: Hash-Schleife „v2“ (Quelle: NerdMiner Modded)
+
+`src/hw_scan_v2.S` ist eine Portierung der Schleife `pipelined_hw_sha_classic_v2.S` aus
+[NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) von HenrysCat
+([Projektseite](https://henryscat.github.io/NerdMiner-Modded/), MIT-Lizenz, Lizenztext in
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)). Die dort gemessenen Wartezeiten sind unverändert übernommen.
+Die wichtigste Erkenntnis aus diesem Projekt: **Writes auf die SHA-Register müssen mindestens 3 Takte auseinander
+liegen.** Sonst gehen sie verloren, sobald der andere Kern gleichzeitig auf den Bus zugreift. Das erklärt auch, warum
+der Software-Miner in 1.1.0 die Hardware um ~95 kH/s ausgebremst hat.
+
+Beim Start prüft ein **Known-Answer-Test** (262.144 Nonces, genau 6 bekannte Treffer, unabhängig in Python
+nachgerechnet) die schnelle Stufe. Fällt sie durch, kommen +2 Takte Reserve, dann breite Reserve, zuletzt die
+kalibrierte Schleife aus 1.1.0. Chips vor Revision 3 bekommen immer die klassische Schleife (DPORT-Fehler im Silizium).
+Im Betrieb wird mitgezählt: Bestätigt die Software von 256 Hardware-Treffern 8 oder mehr nicht, wechselt der
+Miner von selbst auf die nächste, vorsichtigere Stufe.
+
+Bis 1.1.0 (und als letzte Rückfallstufe) werden die Wartezeiten bei jedem Start **kalibriert**: Der ESP32 sucht per Binärsuche die kleinste fehlerfreie
 Wartezeit je Phase (auf 1 Takt genau) und schlägt `HW_CAL_MARGIN_*` Takte Reserve drauf. Geprüft wird dabei
 genau die Schleife, die auch mint. Ein Prüfschritt gilt erst nach zweimaligem Durchfallen als zu knapp, und die
 Kalibrierung hat bis zu drei Anläufe. Erst danach greifen langsame Notwerte. Im laufenden Betrieb werden die
@@ -140,6 +158,10 @@ Messwerkzeuge: `pio run -e hw_probe -t upload` (Registerzugriffe, Engine-Zeiten)
 `pio run -e pipe_probe -t upload` (Wartezeiten und Varianten der Pipeline ab 1.1.0).
 
 ## Rechenfehler, ehrlich gesagt
+
+**Ab 1.2.0 (v2-Schleife):** Known-Answer-Test bestanden, Shares akzeptiert. Ein längerer Brenntest folgt mit 1.2.1.
+
+### Bis 1.1.0
 
 Um diese Geschwindigkeit zu erreichen, wird der SHA-Baustein **nicht nach Datenblatt** betrieben: Die Daten
 werden geschrieben, während er noch rechnet, und statt auf sein BUSY-Signal zu warten, gelten fest gemessene

@@ -16,7 +16,7 @@ static void verify_candidate(const MiningJob& job, uint32_t nonce, bool fromHw)
 {
     uint8_t header[80];
     memcpy(header, job.header, 80);
-    write_le32(header + 76, nonce);
+    write_le32(header + 76, nonce);   // nonce = echte Nonce (bereits zurueckgetauscht)
 
     uint8_t hash[32];
     sha256d(header, 80, hash);
@@ -25,9 +25,13 @@ static void verify_candidate(const MiningJob& job, uint32_t nonce, bool fromHw)
     if (hash[31] != 0 || hash[30] != 0) {
         // Seltener, harmloser HW-Rechenfehler: hier abgefangen, bevor er zum Pool geht.
         // Wird nur gezaehlt (Diagnose), nicht bestraft - kein Share, kein Schaden.
-        if (fromHw) g_stats.hwErrors++;
+        if (fromHw) {
+            g_stats.hwErrors++;
+            hw_sha_report_candidate(false);
+        }
         return;
     }
+    if (fromHw) hw_sha_report_candidate(true);
 
     double diff = hash_difficulty(hash);
     stats_update_best(diff);
@@ -99,7 +103,8 @@ static void mine_loop(ScanFn scan, bool isHw, uint32_t nonceStart, uint32_t nonc
         uint32_t done = scan(job, nonce, count, cands, 8, &nc);
         *hashCounter += done;
 
-        for (int i = 0; i < nc; i++) verify_candidate(job, cands[i], isHw);
+        // Scanner zaehlen im T[3]-Wort (Big-Endian) -> echte Nonce = bswap32
+        for (int i = 0; i < nc; i++) verify_candidate(job, __builtin_bswap32(cands[i]), isHw);
 
         nonce += done;
         if (nonce >= nonceEnd || nonce < nonceStart) {
