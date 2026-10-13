@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 #define MINER_NAME        "ESPressMiner32"
-#define MINER_VERSION     "1.2.0"   // Master 003: v2-Hash-Schleife
+#define MINER_VERSION     "1.2.1"   // Master 003: v2-Hash-Schleife + SW-Miner Core 0
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
 // Difficulty, die beim Pool angefragt wird (mining.suggest_difficulty).
@@ -22,9 +22,10 @@
 // WLAN/Stratum + Software-Miner auf Core 0
 #define HW_MINER_CORE            1
 #define SW_MINER_CORE            0
-// Aus: Der SW-Miner bringt nur ~24 kH/s, bremst aber den HW-Miner ueber den
-// gemeinsamen Bus um ~95 kH/s (gemessen mit der Schleife aus Master 002).
-#define ENABLE_SW_MINER          0
+// Master 002: aus, weil er den HW-Miner ueber den Bus um ~95 kH/s bremste.
+// Master 003 (v1.2.1): an. Die v2-Schleife haelt >= 3 Takte zwischen SHA-Writes ein
+// und verliert dadurch nur ~3 kH/s (gemessen: HW 959.6 + SW 30.4 = 990 kH/s).
+#define ENABLE_SW_MINER          1
 
 // Nonce-Aufteilung zwischen Hardware- und Software-Miner
 #define HW_NONCE_START           0x00000000UL

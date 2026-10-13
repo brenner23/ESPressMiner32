@@ -6,7 +6,8 @@ A Bitcoin Stratum (V1) miner for the **classic ESP32**. It drives the **SHA-256 
 through direct register access with a pipeline: the data for the next block is written while the engine
 is still computing.
 
-Measured on ESP32-D0WD-V3 @ 240 MHz: **~963 kH/s** (247 cycles per double SHA-256), version 1.2.0.
+Measured on ESP32-D0WD-V3 @ 240 MHz: **~990 kH/s** (hardware ~960 kH/s at 247 cycles per double SHA-256
++ software miner on the second core ~30 kH/s), version 1.2.1.
 
 🔗 **Project page:** https://github.com/brenner23/ESPressMiner32
 
@@ -19,7 +20,8 @@ Measured on ESP32-D0WD-V3 @ 240 MHz: **~963 kH/s** (247 cycles per double SHA-25
 
 | Version | kH/s | Cycles/hash | What's new |
 |---|---|---|---|
-| **1.2.0** (current) | **~963** | 247 | New "v2" hash loop from [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), known-answer test at boot, automatic fallback stages |
+| **1.2.1** (current) | **~990** | 247 + SW | Software miner on core 0 enabled again: now costs the hardware only ~3 kH/s |
+| 1.2.0 | ~963 | 247 | New "v2" hash loop from [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), known-answer test at boot, automatic fallback stages |
 | 1.1.0 | ~960 | 249 | Cycle-exact wait loops, calibration checks the real mining loop (fixes a bug in 1.0.0), more robust calibration |
 | 1.0.0 | ~902 | 265 | First release |
 
@@ -31,7 +33,7 @@ There are intentionally no prebuilt firmware files: you flash what you can read 
 
 ## Features
 
-- **~963 kH/s** on a classic ESP32 (hardware SHA pipeline)
+- **~990 kH/s** on a classic ESP32 (hardware SHA pipeline on core 1 + software miner on core 0)
 - **Self-test** at boot (genesis block, 2000 random headers, 5000 nonces). If it fails, the miner does not mine.
 - **Every hit is re-checked in software** before a share is sent to the pool
 - **Web dashboard** at `http://espressminer.local/` with hashrate history, JSON at `/api/stats`
@@ -107,11 +109,11 @@ python tools/espressminer_setup.py --reset         # erase settings -> portal
 | Core | Task |
 |------|------|
 | 1 | Hardware SHA miner (exclusive) |
-| 0 | Wi-Fi, Stratum client, web dashboard, statistics |
+| 0 | Wi-Fi, Stratum client, web dashboard, statistics, software miner (since 1.2.1) |
 
 - **Settings** (gear icon in the dashboard): hostname, Wi-Fi, primary and secondary pool, stored in flash (NVS).
   After 3 failed attempts the miner switches to the other pool; from the secondary it retries the primary every 10 minutes.
-- The dashboard runs on core 0. It costs no measurable hashrate.
+- The dashboard runs on core 0. Frequent reloading briefly costs a few kH/s (measured ~4).
 
 ## Where the hashrate comes from
 
@@ -126,7 +128,8 @@ python tools/espressminer_setup.py --reset         # erase settings -> portal
 | Wait time calibrated per phase | ~842 |
 | Software pipeline: start the next block 1 before the candidate check | ~902 (v1.0.0) |
 | Cycle-exact counting loop (`loopnez`) instead of polling the cycle counter, separate LOAD times | ~960 (v1.1.0) |
-| "v2" hash loop from NerdMiner Modded: counted delays, everything except T[0..7] hidden in engine time | **~963** (v1.2.0) |
+| "v2" hash loop from NerdMiner Modded: counted delays, everything except T[0..7] hidden in engine time | ~963 (v1.2.0) |
+| Software miner on core 0 added (SHA writes >= 3 cycles apart, see below) | **~990** (v1.2.1) |
 
 ### Since 1.2.0: "v2" hash loop (source: NerdMiner Modded)
 
@@ -135,8 +138,8 @@ python tools/espressminer_setup.py --reset         # erase settings -> portal
 ([project page](https://henryscat.github.io/NerdMiner-Modded/), MIT license, license text in
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)). The delays measured there are taken over unchanged.
 The key insight from that project: **stores to the SHA registers must be at least 3 cycles apart**, otherwise they
-are lost whenever the other core accesses the bus at the same time. This also explains why the software miner slowed
-the hardware down by ~95 kH/s in 1.1.0.
+are lost whenever the other core accesses the bus at the same time. That is exactly why the software miner slowed
+the hardware down by ~95 kH/s in 1.1.0; with v2 it is only ~3 kH/s.
 
 At boot a **known-answer test** (262,144 nonces, exactly 6 known hits, independently recomputed in Python) checks
 the fast stage. If it fails, +2 cycles of headroom follow, then wide headroom, and finally the calibrated loop from
@@ -158,7 +161,12 @@ Measurement tools: `pio run -e hw_probe -t upload` (register access costs, engin
 
 ## Calculation errors, honestly
 
-**Since 1.2.0 (v2 loop):** known-answer test passed, shares accepted. A longer burn-in test follows with 1.2.1.
+**Since 1.2.0 (v2 loop):** burn-in test with pool connection and Wi-Fi: 26.7 minutes, avg **989.6 kH/s**, 1.59 billion hashes:
+**0 calculation errors**, **42 of 42 shares accepted** (~36 expected at pool diff 0.01). As an authenticity check
+`/api/stats` counts all 16-bit hits (`candidates`): there must be ~hashes/65,536, measured 99.6 % of that
+(23,982 of ~24,070, within statistical noise). So the hashrate is really computed, not just counted.
+
+![Dashboard v1.2.1 after 26 minutes (pool, wallet and Wi-Fi redacted)](docs/dashboard_v1.2.1.png)
 
 ### Up to 1.1.0
 

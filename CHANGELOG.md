@@ -2,6 +2,15 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.2.1 – Master 003 (2026-10-13) – Software-Miner wieder an, ~990 kH/s
+- Software-Miner auf Core 0 eingeschaltet (`ENABLE_SW_MINER 1`).
+- Gemessen: HW 959,6 + SW 30,4 = **~990 kH/s** (Master 002 verlor mit SW-Miner ~95 kH/s,
+  jetzt nur ~3 kH/s).
+- Brenntest 26,7 min: Ø 989,6 kH/s, 0 Rechenfehler, 42/42 Shares akzeptiert,
+  16-Bit-Kandidaten 99,6 % des Erwarteten (statistisch einwandfrei).
+- /api/stats: neue Felder candidates, hwHashes, swHashes, hwLoop (Echtheits-Check).
+- Screenshot docs/dashboard_v1.2.1.png (Pool, Wallet, WLAN geschwaerzt).
+
 ## v1.2.0 – Master 003 (2026-10-13) – neue Hash-Schleife „v2“, 963 kH/s
 - Neue Hash-Schleife `src/hw_scan_v2.S`, portiert aus **NerdMiner Modded** (MIT,
   HenrysCat, https://github.com/HenrysCat/NerdMiner-Modded): 247 Takte/Nonce,

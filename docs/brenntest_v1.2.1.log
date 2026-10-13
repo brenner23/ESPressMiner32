@@ -1,0 +1,31 @@
+16:19:12 up    20s   989.7 kH/s avg  977.3 | Kand    399 erw      371 (107.6%) | HWerr 0 | Shares A/S/R 0/0/0 | best 0.0050 | v2 schnell (247 Takte) | heap 167940
+16:20:12 up    80s   989.7 kH/s avg  986.7 | Kand   1274 erw     1278 ( 99.7%) | HWerr 0 | Shares A/S/R 1/1/0 | best 0.0209 | v2 schnell (247 Takte) | heap 167276
+16:21:12 up   140s   989.9 kH/s avg  988.0 | Kand   2191 erw     2185 (100.3%) | HWerr 0 | Shares A/S/R 3/3/0 | best 0.0217 | v2 schnell (247 Takte) | heap 167336
+16:22:12 up    30s   985.6 kH/s avg  980.0 | Kand    505 erw      489 (103.2%) | HWerr 0 | Shares A/S/R 2/2/0 | best 0.1156 | v2 schnell (247 Takte) | heap 167580
+16:23:12 up    90s   990.5 kH/s avg  985.8 | Kand   1373 erw     1395 ( 98.4%) | HWerr 0 | Shares A/S/R 3/3/0 | best 0.1156 | v2 schnell (247 Takte) | heap 167640
+16:24:12 up   150s   990.3 kH/s avg  987.5 | Kand   2315 erw     2302 (100.5%) | HWerr 0 | Shares A/S/R 5/5/0 | best 0.1156 | v2 schnell (247 Takte) | heap 167676
+16:25:12 up   210s   990.1 kH/s avg  988.1 | Kand   3263 erw     3210 (101.7%) | HWerr 0 | Shares A/S/R 5/5/0 | best 0.1156 | v2 schnell (247 Takte) | heap 168812
+16:26:12 up   270s   990.3 kH/s avg  988.6 | Kand   4104 erw     4117 ( 99.7%) | HWerr 0 | Shares A/S/R 6/6/0 | best 0.1156 | v2 schnell (247 Takte) | heap 168816
+16:27:12 up   330s   990.3 kH/s avg  988.9 | Kand   5004 erw     5024 ( 99.6%) | HWerr 0 | Shares A/S/R 7/7/0 | best 0.1156 | v2 schnell (247 Takte) | heap 170416
+16:28:12 up   390s   990.3 kH/s avg  989.0 | Kand   5910 erw     5931 ( 99.6%) | HWerr 0 | Shares A/S/R 7/7/0 | best 0.1156 | v2 schnell (247 Takte) | heap 170408
+16:29:12 up   450s   989.9 kH/s avg  989.1 | Kand   6782 erw     6838 ( 99.2%) | HWerr 0 | Shares A/S/R 9/9/0 | best 0.1156 | v2 schnell (247 Takte) | heap 170636
+16:30:12 up   511s   988.6 kH/s avg  989.2 | Kand   7716 erw     7745 ( 99.6%) | HWerr 0 | Shares A/S/R 9/9/0 | best 0.1156 | v2 schnell (247 Takte) | heap 170408
+16:31:12 up   571s   990.1 kH/s avg  989.3 | Kand   8627 erw     8652 ( 99.7%) | HWerr 0 | Shares A/S/R 11/11/0 | best 0.1156 | v2 schnell (247 Takte) | heap 170180
+16:32:12 up   631s   990.1 kH/s avg  989.3 | Kand   9526 erw     9559 ( 99.7%) | HWerr 0 | Shares A/S/R 13/13/0 | best 0.1156 | v2 schnell (247 Takte) | heap 169036
+16:33:12 up   691s   989.9 kH/s avg  989.4 | Kand  10449 erw    10466 ( 99.8%) | HWerr 0 | Shares A/S/R 17/17/0 | best 0.1156 | v2 schnell (247 Takte) | heap 167364
+16:34:12 up   751s   990.1 kH/s avg  989.4 | Kand  11305 erw    11373 ( 99.4%) | HWerr 0 | Shares A/S/R 18/18/0 | best 0.1156 | v2 schnell (247 Takte) | heap 167444
+16:35:13 up   811s   989.9 kH/s avg  989.4 | Kand  12233 erw    12280 ( 99.6%) | HWerr 0 | Shares A/S/R 19/19/0 | best 0.1156 | v2 schnell (247 Takte) | heap 167344
+16:36:13 up   871s   988.0 kH/s avg  989.4 | Kand  13085 erw    13186 ( 99.2%) | HWerr 0 | Shares A/S/R 23/23/0 | best 0.2914 | v2 schnell (247 Takte) | heap 167384
+16:37:13 up   932s   989.9 kH/s avg  989.5 | Kand  14013 erw    14093 ( 99.4%) | HWerr 0 | Shares A/S/R 25/25/0 | best 0.2914 | v2 schnell (247 Takte) | heap 167388
+16:38:13 up   992s   988.2 kH/s avg  989.5 | Kand  14907 erw    15001 ( 99.4%) | HWerr 0 | Shares A/S/R 25/25/0 | best 0.2914 | v2 schnell (247 Takte) | heap 167388
+16:39:13 up  1052s   989.9 kH/s avg  989.5 | Kand  15816 erw    15908 ( 99.4%) | HWerr 0 | Shares A/S/R 27/27/0 | best 0.2914 | v2 schnell (247 Takte) | heap 167380
+16:40:13 up  1112s   989.9 kH/s avg  989.5 | Kand  16681 erw    16814 ( 99.2%) | HWerr 0 | Shares A/S/R 27/27/0 | best 0.2914 | v2 schnell (247 Takte) | heap 167384
+16:41:13 up  1172s   989.9 kH/s avg  989.5 | Kand  17570 erw    17721 ( 99.1%) | HWerr 0 | Shares A/S/R 28/28/0 | best 0.2914 | v2 schnell (247 Takte) | heap 167388
+16:42:13 up  1232s   989.9 kH/s avg  989.5 | Kand  18509 erw    18628 ( 99.4%) | HWerr 0 | Shares A/S/R 31/31/0 | best 0.3191 | v2 schnell (247 Takte) | heap 167384
+16:43:13 up  1292s   988.2 kH/s avg  989.5 | Kand  19422 erw    19535 ( 99.4%) | HWerr 0 | Shares A/S/R 32/32/0 | best 0.3191 | v2 schnell (247 Takte) | heap 167380
+16:44:13 up  1352s   989.9 kH/s avg  989.5 | Kand  20323 erw    20442 ( 99.4%) | HWerr 0 | Shares A/S/R 35/35/0 | best 0.7617 | v2 schnell (247 Takte) | heap 167384
+16:45:13 up  1413s   990.1 kH/s avg  989.5 | Kand  21239 erw    21349 ( 99.5%) | HWerr 0 | Shares A/S/R 36/36/0 | best 0.7617 | v2 schnell (247 Takte) | heap 167384
+16:46:13 up  1473s   989.9 kH/s avg  989.5 | Kand  22141 erw    22256 ( 99.5%) | HWerr 0 | Shares A/S/R 38/38/0 | best 0.7617 | v2 schnell (247 Takte) | heap 167452
+16:47:13 up  1533s   988.4 kH/s avg  989.6 | Kand  23025 erw    23163 ( 99.4%) | HWerr 0 | Shares A/S/R 42/42/0 | best 0.7617 | v2 schnell (247 Takte) | heap 167376
+16:48:13 up  1593s   989.9 kH/s avg  989.6 | Kand  23982 erw    24070 ( 99.6%) | HWerr 0 | Shares A/S/R 42/42/0 | best 0.7617 | v2 schnell (247 Takte) | heap 167380
+16:49:13 up  1653s   989.7 kH/s avg  989.6 | Kand  24870 erw    24977 ( 99.6%) | HWerr 0 | Shares A/S/R 44/44/0 | best 0.7617 | v2 schnell (247 Takte) | heap 167388

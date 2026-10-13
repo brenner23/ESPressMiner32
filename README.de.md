@@ -6,7 +6,8 @@ Ein Bitcoin-Stratum-Miner (V1) für den **klassischen ESP32**. Er nutzt den **SH
 per direktem Registerzugriff mit einer Pipeline: Die Daten für den nächsten Block werden geschrieben,
 während die Engine noch rechnet.
 
-Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~963 kH/s** (247 Takte pro Double-SHA256), Version 1.2.0.
+Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~990 kH/s** (Hardware ~960 kH/s mit 247 Takten pro Double-SHA256
++ Software-Miner auf dem zweiten Kern ~30 kH/s), Version 1.2.1.
 
 🔗 **Projektseite:** https://github.com/brenner23/ESPressMiner32
 
@@ -17,7 +18,8 @@ Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~963 kH/s** (247 Takte pro Double-SHA256
 
 | Version | kH/s | Takte/Hash | Was ist neu |
 |---|---|---|---|
-| **1.2.0** (aktuell) | **~963** | 247 | Neue Hash-Schleife „v2“ aus [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), Known-Answer-Test beim Start, automatische Rückfallstufen |
+| **1.2.1** (aktuell) | **~990** | 247 + SW | Software-Miner auf Core 0 wieder an: kostet die Hardware nur noch ~3 kH/s |
+| 1.2.0 | ~963 | 247 | Neue Hash-Schleife „v2“ aus [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), Known-Answer-Test beim Start, automatische Rückfallstufen |
 | 1.1.0 | ~960 | 249 | Taktgenaue Warteschleifen, Kalibrierung prüft die echte Mining-Schleife (behebt einen Fehler aus 1.0.0), robustere Kalibrierung |
 | 1.0.0 | ~902 | 265 | Erste Version |
 
@@ -29,7 +31,7 @@ Es gibt bewusst keine fertigen Firmware-Dateien: Geflasht wird, was man im Quell
 
 ## Funktionen
 
-- **~963 kH/s** auf einem klassischen ESP32 (Hardware-SHA-Pipeline)
+- **~990 kH/s** auf einem klassischen ESP32 (Hardware-SHA-Pipeline auf Core 1 + Software-Miner auf Core 0)
 - **Selbsttest** beim Start (Genesis-Block, 2000 Zufalls-Header, 5000 Nonces). Schlägt er fehl, wird nicht gemint.
 - **Jeder Treffer wird in Software nachgerechnet**, bevor ein Share zum Pool geht
 - **Web-Dashboard** unter `http://espressminer.local/` mit Hashrate-Verlauf, JSON unter `/api/stats`
@@ -105,11 +107,11 @@ python tools/espressminer_setup.py --reset         # Einstellungen löschen -> P
 | Core | Aufgabe |
 |------|---------|
 | 1 | Hardware-SHA-Miner (exklusiv) |
-| 0 | WLAN, Stratum-Client, Web-Dashboard, Statistik |
+| 0 | WLAN, Stratum-Client, Web-Dashboard, Statistik, Software-Miner (ab 1.2.1) |
 
 - **Einstellungen** (Zahnrad im Dashboard): Hostname, WLAN, Primary- und Secondary-Pool, gespeichert im Flash (NVS).
   Nach 3 Fehlversuchen wechselt der Miner zum anderen Pool, vom Secondary aus wird alle 10 Minuten der Primary erneut versucht.
-- Das Dashboard läuft auf Core 0. Es kostet keine messbare Hashrate.
+- Das Dashboard läuft auf Core 0. Häufiges Neuladen kostet kurzzeitig ein paar kH/s (gemessen ~4).
 
 ## Wie die Hashrate zustande kommt
 
@@ -124,7 +126,8 @@ python tools/espressminer_setup.py --reset         # Einstellungen löschen -> P
 | Wartezeit je Phase einzeln kalibriert | ~842 |
 | Software-Pipeline: nächsten Block 1 vor der Kandidatenprüfung starten | ~902 (v1.0.0) |
 | Taktgenaue Zählschleife (`loopnez`) statt Abfrage der Taktuhr, LOAD-Zeiten getrennt | ~960 (v1.1.0) |
-| Hash-Schleife „v2“ aus NerdMiner Modded: Wartezeiten gezählt, alles außer T[0..7] in Rechenzeit der Engine | **~963** (v1.2.0) |
+| Hash-Schleife „v2“ aus NerdMiner Modded: Wartezeiten gezählt, alles außer T[0..7] in Rechenzeit der Engine | ~963 (v1.2.0) |
+| Software-Miner auf Core 0 dazu (SHA-Writes ≥ 3 Takte auseinander, siehe unten) | **~990** (v1.2.1) |
 
 ### Ab 1.2.0: Hash-Schleife „v2“ (Quelle: NerdMiner Modded)
 
@@ -133,8 +136,8 @@ python tools/espressminer_setup.py --reset         # Einstellungen löschen -> P
 ([Projektseite](https://henryscat.github.io/NerdMiner-Modded/), MIT-Lizenz, Lizenztext in
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)). Die dort gemessenen Wartezeiten sind unverändert übernommen.
 Die wichtigste Erkenntnis aus diesem Projekt: **Writes auf die SHA-Register müssen mindestens 3 Takte auseinander
-liegen.** Sonst gehen sie verloren, sobald der andere Kern gleichzeitig auf den Bus zugreift. Das erklärt auch, warum
-der Software-Miner in 1.1.0 die Hardware um ~95 kH/s ausgebremst hat.
+liegen.** Sonst gehen sie verloren, sobald der andere Kern gleichzeitig auf den Bus zugreift. Genau deshalb hat der
+Software-Miner in 1.1.0 die Hardware um ~95 kH/s ausgebremst. Mit v2 sind es nur noch ~3 kH/s.
 
 Beim Start prüft ein **Known-Answer-Test** (262.144 Nonces, genau 6 bekannte Treffer, unabhängig in Python
 nachgerechnet) die schnelle Stufe. Fällt sie durch, kommen +2 Takte Reserve, dann breite Reserve, zuletzt die
@@ -159,7 +162,12 @@ Messwerkzeuge: `pio run -e hw_probe -t upload` (Registerzugriffe, Engine-Zeiten)
 
 ## Rechenfehler, ehrlich gesagt
 
-**Ab 1.2.0 (v2-Schleife):** Known-Answer-Test bestanden, Shares akzeptiert. Ein längerer Brenntest folgt mit 1.2.1.
+**Ab 1.2.0 (v2-Schleife):** Brenntest mit Pool-Verbindung und WLAN: 26,7 Minuten, Ø **989,6 kH/s**, 1,59 Mrd. Hashes:
+**0 Rechenfehler**, **42 von 42 Shares akzeptiert** (erwartet ~36 bei Pool-Diff 0,01). Als Echtheits-Check zählt
+`/api/stats` alle 16-Bit-Treffer (`candidates`): Es müssen ~Hashes/65.536 sein, gemessen 99,6 % davon
+(23.982 von ~24.070, innerhalb der statistischen Schwankung). Die Hashrate ist also wirklich gerechnet, nicht nur gezählt.
+
+![Dashboard v1.2.1 nach 26 Minuten (Pool, Wallet und WLAN geschwärzt)](docs/dashboard_v1.2.1.png)
 
 ### Bis 1.1.0
 
