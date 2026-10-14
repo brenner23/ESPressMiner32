@@ -38,11 +38,12 @@ def main():
             z.write(path, Path("ESPressMiner32") / rel)
             count += 1
         # Fertig gebaute Firmware dieses Stands (falls vorhanden) zum direkten Flashen
-        build = ROOT / ".pio" / "build" / "esp32dev"
-        for name in ("firmware.bin", "bootloader.bin", "partitions.bin"):
-            if (build / name).exists():
-                z.write(build / name, Path("ESPressMiner32") / "firmware" / name)
-                count += 1
+        # alle Build-Umgebungen (esp32dev, looptest, ...) je in eigenen Unterordner
+        for build in sorted((ROOT / ".pio" / "build").glob("*")):
+            for name in ("firmware.bin", "bootloader.bin", "partitions.bin"):
+                if (build / name).exists():
+                    z.write(build / name, Path("ESPressMiner32") / "firmware" / build.name / name)
+                    count += 1
         info = f"Stand: {label}\nErstellt: {datetime.now():%Y-%m-%d %H:%M}\n"
         if note:
             info += f"Notiz: {note}\n"

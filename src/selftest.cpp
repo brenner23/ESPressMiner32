@@ -20,7 +20,7 @@ static const char* GENESIS_HASH =
 
 static bool check(const char* name, bool ok)
 {
-    Serial.printf("  %-38s %s\n", name, ok ? "OK" : "FEHLER");
+    Serial.printf("  %-38s %s\n", name, ok ? "OK" : "FAILED");
     return ok;
 }
 
@@ -118,7 +118,7 @@ static HwTiming s_lim;   // gefundene Grenzwerte (ohne Reserve)
 
 bool selftest_calibrate()
 {
-    Serial.println("[Kalibrierung]");
+    Serial.println("[Calibration]");
     HwTiming tm = HW_TIMING_SAFE;
     const uint32_t t0 = millis();
 
@@ -130,7 +130,7 @@ bool selftest_calibrate()
     // Jede Phase einzeln minimal suchen, dann gemeinsam nachschaerfen
     for (int i = 0; i < 5; i++) {
         if (!find_min(tm, fields[i], 0, safeVal[i])) {
-            Serial.printf("  Keine fehlerfreie Wartezeit fuer %s gefunden\n", names[i]);
+            Serial.printf("  No error-free delay found for %s\n", names[i]);
             return false;
         }
     }
@@ -153,18 +153,18 @@ bool selftest_calibrate()
         errors = pipeline_mismatches(20000);
         ok = errors >= 0 && errors <= CAL_MAX_ERRORS_20K;
     }
-    Serial.printf("  Grenze: %lu/%lu/%lu Load %lu/%lu  ->  eingestellt: %lu/%lu/%lu Load %lu/%lu  (%d/20000 Fehler, %lu ms) %s\n",
+    Serial.printf("  Limit: %lu/%lu/%lu load %lu/%lu  ->  set: %lu/%lu/%lu load %lu/%lu  (%d/20000 errors, %lu ms) %s\n",
                   (unsigned long)lim.block[0], (unsigned long)lim.block[1], (unsigned long)lim.block[2],
                   (unsigned long)lim.load[0], (unsigned long)lim.load[1],
                   (unsigned long)tm.block[0], (unsigned long)tm.block[1], (unsigned long)tm.block[2],
                   (unsigned long)tm.load[0], (unsigned long)tm.load[1], errors,
-                  (unsigned long)(millis() - t0), ok ? "OK" : "FEHLER");
+                  (unsigned long)(millis() - t0), ok ? "OK" : "FAILED");
     return ok;
 }
 
 bool selftest_run()
 {
-    Serial.println("[Selbsttest]");
+    Serial.println("[Self-test]");
     uint8_t header[80], expect[32], out[32];
     hex_to_bytes(GENESIS_HEADER, header, 80);
     hex_to_bytes(GENESIS_HASH, expect, 32);
@@ -187,11 +187,11 @@ bool selftest_run()
     uint32_t cands[8];
     int nc = 0;
     sw_scan(mid, b2, genesisNonce - 2, 4, cands, 8, &nc);
-    ok &= check("Software-Scan findet Genesis-Nonce", nc == 1 && cands[0] == genesisNonce);
+    ok &= check("Software scan finds genesis nonce", nc == 1 && cands[0] == genesisNonce);
 
     nc = 0;
     hw_scan(b1, b2, genesisNonce - 2, 4, HW_CAND_MASK, cands, 8, &nc);
-    ok &= check("Hardware-Scan findet Genesis-Nonce", nc == 1 && cands[0] == genesisNonce);
+    ok &= check("Hardware scan finds genesis nonce", nc == 1 && cands[0] == genesisNonce);
 
     // Zufaellige Header: HW == SW
     int mismatches = 0;
@@ -203,12 +203,12 @@ bool selftest_run()
         if (memcmp(a, b, 32) != 0) mismatches++;
     }
     char label[64];
-    snprintf(label, sizeof(label), "HW == SW (2000 Zufalls-Header, %d Fehler)", mismatches);
+    snprintf(label, sizeof(label), "HW == SW (2000 random headers, %d errors)", mismatches);
     ok &= check(label, mismatches <= 1);   // seltene Einzelfehler, siehe CAL_MAX_ERRORS_*
 
     // Pipeline ueber aufeinanderfolgende Nonces (wie im Mining-Betrieb)
     mismatches = pipeline_mismatches(5000);
-    snprintf(label, sizeof(label), "HW-Pipeline 5000 Nonces (%d Fehler)", mismatches);
+    snprintf(label, sizeof(label), "HW pipeline 5000 nonces (%d errors)", mismatches);
     ok &= check(label, mismatches >= 0 && mismatches <= 2);
 
     return ok;
@@ -233,7 +233,7 @@ void selftest_benchmark()
     sw_scan(mid, b2, 0, N_SW, cands, 8, &nc);
     uint32_t tSw = micros() - t0;
 
-    Serial.printf("[Benchmark] Hardware: %.1f kH/s (%lu Takte/Hash) | Software: %.1f kH/s\n",
+    Serial.printf("[Benchmark] Hardware: %.1f kH/s (%lu cycles/hash) | Software: %.1f kH/s\n",
                   N_HW * 1000.0 / tHw, (unsigned long)((uint64_t)tHw * 240 / N_HW),
                   N_SW * 1000.0 / tSw);
 }
@@ -246,7 +246,7 @@ void selftest_margin_sweep()
     int nc;
     esp_fill_random(b1, sizeof(b1));
     esp_fill_random(b2, sizeof(b2));
-    Serial.println("[Reserve-Test] je 100000 Nonces, Software-Pruefung (WLAN aktiv)");
+    Serial.println("[Margin test] 100000 nonces each, software check (Wi-Fi active)");
     for (uint32_t m = 0; m <= 4; m++) {
         HwTiming tm = s_lim;
         for (int i = 0; i < 3; i++) tm.block[i] += m;
@@ -257,7 +257,7 @@ void selftest_margin_sweep()
         uint32_t t0 = micros();
         hw_scan(b1, b2, 0, 100000, HW_CAND_MASK, cands, 8, &nc);
         uint32_t dt = micros() - t0;
-        Serial.printf("  Reserve %lu: %lu/%lu/%lu Load %lu/%lu -> %lu Takte = %.1f kH/s | %d Fehler (erkannt) /100000\n",
+        Serial.printf("  Margin %lu: %lu/%lu/%lu load %lu/%lu -> %lu cycles = %.1f kH/s | %d errors (detected) /100000\n",
                       (unsigned long)m, (unsigned long)tm.block[0], (unsigned long)tm.block[1],
                       (unsigned long)tm.block[2], (unsigned long)tm.load[0], (unsigned long)tm.load[1],
                       (unsigned long)((uint64_t)dt * 240 / 100000), 100000 * 1000.0 / dt, errors);
@@ -274,7 +274,7 @@ void selftest_long_test(uint32_t margin, uint32_t minutes)
     for (int i = 0; i < 3; i++) tm.block[i] += margin;
     for (int i = 0; i < 2; i++) tm.load[i] += margin;
     hw_sha_set_timing(tm);
-    Serial.printf("[Langzeittest] Reserve %lu (%lu/%lu/%lu Load %lu/%lu), %lu Minuten, WLAN aktiv\n",
+    Serial.printf("[Long test] margin %lu (%lu/%lu/%lu load %lu/%lu), %lu minutes, Wi-Fi active\n",
                   (unsigned long)margin, (unsigned long)tm.block[0], (unsigned long)tm.block[1],
                   (unsigned long)tm.block[2], (unsigned long)tm.load[0], (unsigned long)tm.load[1],
                   (unsigned long)minutes);
@@ -288,7 +288,7 @@ void selftest_long_test(uint32_t margin, uint32_t minutes)
             checked += 20000;
             vTaskDelay(1);
         }
-        Serial.printf("  Reserve %lu, Minute %2lu: %llu Hashes geprueft, %lu Fehler erkannt -> ca. 1 Fehler je %s Hashes\n",
+        Serial.printf("  Margin %lu, minute %2lu: %llu hashes checked, %lu errors detected -> about 1 error per %s hashes\n",
                       (unsigned long)margin, (unsigned long)m, (unsigned long long)checked, (unsigned long)errors,
                       errors ? String((unsigned long)(checked / (2ULL * errors))).c_str() : "(keiner)");
     }

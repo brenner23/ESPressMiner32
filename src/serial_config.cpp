@@ -36,7 +36,7 @@ static void handle_line(const String& line)
 {
     JsonDocument in;
     if (deserializeJson(in, line)) {
-        reply_error("Ungueltiges JSON");
+        reply_error("Invalid JSON");
         return;
     }
     const char* cmd = in["cmd"] | "";
@@ -66,17 +66,17 @@ static void handle_line(const String& line)
             return;
         }
         if (!settings_save(s)) {
-            reply_error("Speichern fehlgeschlagen");
+            reply_error("Saving failed");
             return;
         }
         out["ok"] = true;
-        out["msg"] = "Gespeichert - Neustart";
+        out["msg"] = "Saved - restarting";
         reply(out);
         restart_soon();
     } else if (strcmp(cmd, "reset") == 0) {
         settings_clear();
         out["ok"] = true;
-        out["msg"] = "Einstellungen geloescht - Neustart ins Portal";
+        out["msg"] = "Settings erased - restarting into setup portal";
         reply(out);
         restart_soon();
     } else if (strcmp(cmd, "restart") == 0) {
@@ -84,7 +84,7 @@ static void handle_line(const String& line)
         reply(out);
         restart_soon();
     } else {
-        reply_error("Unbekannter Befehl (info, get, set, reset, restart)");
+        reply_error("Unknown command (info, get, set, reset, restart)");
     }
 }
 
@@ -110,7 +110,7 @@ static void serial_config_task(void*)
         if (digitalRead(RESET_BUTTON_PIN) == LOW) {
             if (!bootPressedSince) bootPressedSince = millis();
             if (millis() - bootPressedSince > BOOT_HOLD_MS) {
-                Serial.println("[Setup] BOOT-Taste gehalten - Einstellungen werden geloescht");
+                Serial.println("[Setup] BOOT button held - erasing settings");
                 settings_clear();
                 restart_soon();
             }

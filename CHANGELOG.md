@@ -2,6 +2,22 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.0.008 – Master 004 (2026-10-14) – Entwicklungsstand (noch kein Release v1.3.0)
+Schritte 1.3.0.001–.008 im Detail mit Messwerten: MESSPROTOKOLL.md.
+- Hash-Schleife **J** (Header-Woerter in Registern, 241 Takte) als Hauptschleife, Rueckfall J -> A -> +2 -> breit.
+  **~1020 kH/s** (HW ~990 + SW ~30).
+- Laufzeit-Kontrolle mit zwei Fenstern: kurze Fehlerschuebe werfen J nicht mehr auf eine langsamere Stufe.
+- Chip-Temperatur + Ueberhitzungsschutz (SW-Miner pausiert / Mining stoppt / Wiederanlauf mit Hysterese).
+- Core 1 ohne Zwangspause (+1,3 kH/s). Reset-Grund und Variante vor dem Neustart in /api/stats.
+- Alle Ausgaben (Web, API, Konsole) auf Englisch.
+- **WLAN-Waechter:** verbindet nach WLAN-Verlust selbst neu (alle Kanaele, staerkster Mesh-Knoten), Neustart
+  nach 3 min offline. 1.3.0.007 blieb nach einem Kanalwechsel im Mesh dauerhaft offline.
+- **Schutzfenster:** die verbleibenden HW-Fehler kamen als Schub alle ~600 s von der WLAN-Verbindung (periodische
+  Aktion des Access Points, kein IP-Verkehr). Die Firmware lernt den Takt und rechnet um den erwarteten Zeitpunkt
+  12 s lang mit der vorsichtigeren Schleife (~1,2 kH/s). Erstes Fenster im Test: 0 statt 6–7 Fehler.
+  Falsche Hashes gingen auch vorher nie an den Pool – jeder Kandidat wird in Software nachgerechnet.
+- Diagnose-Build `pio run -e diag` (/api/diag, tools/diag_collect.py) fuer eigene Netz-Untersuchungen.
+
 ## v1.2.1 – Master 003 (2026-10-13) – Software-Miner wieder an, ~990 kH/s
 - Software-Miner auf Core 0 eingeschaltet (`ENABLE_SW_MINER 1`).
 - Gemessen: HW 959,6 + SW 30,4 = **~990 kH/s** (Master 002 verlor mit SW-Miner ~95 kH/s,

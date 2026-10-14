@@ -53,7 +53,7 @@ bool settings_load()
     if (!s_configured && load_from(NVS_LEGACY)) {
         settings_save(g_settings);
         clear_ns(NVS_LEGACY);
-        Serial.println("[Settings] Einstellungen aus altem Namespace uebernommen");
+        Serial.println("[Settings] Settings taken over from old namespace");
     } else if (!s_configured) {
         load_from(NVS_NAMESPACE);   // Vorbelegung aus credentials.h
     }
@@ -123,15 +123,15 @@ static bool valid_pool_url(const String& url)
 
 const char* settings_validate(const Settings& s)
 {
-    if (s.minerName.isEmpty())                      return "Anzeigename fehlt";
-    if (s.hostname.isEmpty())                       return "Hostname fehlt";
-    if (s.wifiSsid.isEmpty())                       return "WLAN-SSID fehlt";
-    if (s.pools[0].url.isEmpty())                   return "Primary Pool URL fehlt";
+    if (s.minerName.isEmpty())                      return "Display name missing";
+    if (s.hostname.isEmpty())                       return "Hostname missing";
+    if (s.wifiSsid.isEmpty())                       return "Wi-Fi SSID missing";
+    if (s.pools[0].url.isEmpty())                   return "Primary pool URL missing";
     if (!valid_pool_url(s.pools[0].url) || !valid_pool_url(s.pools[1].url))
-        return "Pool URL muss so aussehen: stratum+tcp://host:port";
-    if (s.pools[0].user.isEmpty())                  return "Wallet-Adresse (Primary) fehlt";
+        return "Pool URL must look like: stratum+tcp://host:port";
+    if (s.pools[0].user.isEmpty())                  return "Wallet address (primary) missing";
     if (s.pools[1].url.length() && s.pools[1].user.isEmpty())
-        return "Wallet-Adresse (Secondary) fehlt";
+        return "Wallet address (secondary) missing";
     return nullptr;
 }
 

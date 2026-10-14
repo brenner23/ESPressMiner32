@@ -14,3 +14,6 @@ backups/
 *.7z
 __pycache__/
 *.pyc
+
+# interne Notizen (IPs, Zugaenge)
+NACHTLOG_HINWEIS.md

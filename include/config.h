@@ -4,7 +4,11 @@
 // ---------------------------------------------------------------------------
 
 #define MINER_NAME        "ESPressMiner32"
-#define MINER_VERSION     "1.2.1"   // Master 003: v2-Hash-Schleife + SW-Miner Core 0
+#if DIAG_NET
+#define MINER_VERSION     "1.3.0.008-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
+#else
+#define MINER_VERSION     "1.3.0.008"   // Master 004, Schritt 008: WLAN-Waechter + Schutzfenster gegen die 10-Minuten-Welle
+#endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
 // Difficulty, die beim Pool angefragt wird (mining.suggest_difficulty).
@@ -37,6 +41,13 @@
 #define HW_BATCH_SIZE            8192
 #define SW_BATCH_SIZE            1024
 
+// HW-Miner (Core 1): Zwangspause von 1 Tick alle HW_YIELD_MS. 0 = keine Pause (ab 1.3.0.006).
+// Auf Core 1 laeuft sonst nichts (loopTask beendet, Watchdog prueft IDLE1 nicht), die Pause
+// kostete ~0,2 % (1 ms je 500 ms). Zurueck: 500.
+#ifndef HW_YIELD_MS
+#define HW_YIELD_MS              0
+#endif
+
 // Sicherheitsabstand (CPU-Takte) auf die beim Start gemessenen Grenzwerte
 // der Hardware-Pipeline. Kleiner = schneller, groesser = mehr Reserve.
 #define HW_CAL_MARGIN_BLOCK      1
@@ -52,6 +63,28 @@
 // (die Engine liest T[0..7] erst nach START ein). Die Kalibrierung prueft das mit.
 #define HW_ASM_LOOP_GUARD        0
 
+// Master 004 Messbetrieb: >0 = Varianten der Hash-Schleife reihum je so viele Minuten
+// minen und Hashrate / verworfene Kandidaten je Variante protokollieren (Konsole, /api/stats).
+// 0 = Normalbetrieb.
+#ifndef HW_LOOP_TEST
+#define HW_LOOP_TEST             0
+#endif
+
+// Ueberhitzungsschutz (ab 1.3.0.004), Werte des internen Sensors (grob, +-10 Grad Versatz).
+// Ab SW_PAUSE pausiert der Software-Miner, ab STOP das ganze Mining; unter RESUME laeuft
+// alles wieder. Werte ausserhalb PLAUSIBLE gelten als Sensorfehler und werden ignoriert.
+#ifndef TEMP_SW_PAUSE_C
+#define TEMP_SW_PAUSE_C          90.0f
+#endif
+#ifndef TEMP_STOP_C
+#define TEMP_STOP_C              100.0f
+#endif
+#ifndef TEMP_RESUME_C
+#define TEMP_RESUME_C            80.0f
+#endif
+#define TEMP_PLAUSIBLE_MIN_C     (-20.0f)
+#define TEMP_PLAUSIBLE_MAX_C     150.0f
+
 // mDNS-Name (Standard fuer den Hostnamen)  ->  http://espressminer.local
 #define WEB_MDNS_NAME            "espressminer"
 
@@ -59,6 +92,27 @@
 #define PORTAL_AP_PASSWORD       "espressminer"
 // So lange wird beim Start auf das gespeicherte WLAN gewartet, dann Portal zusaetzlich an
 #define WIFI_CONNECT_TIMEOUT_MS  20000UL
+
+// WLAN-Waechter (ab 1.3.0.008): Nach einem Kanalwechsel im Mesh blieb 1.3.0.007 dauerhaft
+// offline. Ist das WLAN so lange weg, wird neu verbunden (Suche ueber alle Kanaele) ...
+#define WIFI_RECONNECT_AFTER_MS  10000UL
+#define WIFI_RECONNECT_EVERY_MS  20000UL
+// ... und hilft das nicht, startet der Miner neu.
+#define WIFI_REBOOT_AFTER_MS     (3UL * 60UL * 1000UL)
+
+// Schutzfenster (ab 1.3.0.008): Ein Geraet im Netz (Mesh/Router) stoert den ESP alle
+// ~600 s fuer einen Augenblick (4-8 HW-Fehler auf einen Schlag). Der Miner lernt diesen
+// Takt und rechnet um den erwarteten Zeitpunkt herum mit einer vorsichtigeren Schleife.
+#ifndef HW_GUARD_ENABLE
+#define HW_GUARD_ENABLE          1
+#endif
+#define HW_GUARD_BURST_ERRORS    2        // so viele HW-Fehler ...
+#define HW_GUARD_BURST_MS        2000UL   // ... innerhalb dieser Zeit = Schub
+#define HW_GUARD_PERIOD_MIN_MS   60000UL  // erlaubter Takt 1 .. 30 min (hier gemessen: 600,47 s)
+#define HW_GUARD_PERIOD_MAX_MS   1800000UL
+#define HW_GUARD_BEFORE_MS       6000UL   // Fenster vor ...
+#define HW_GUARD_AFTER_MS        6000UL   // ... und nach dem erwarteten Schub
+#define HW_GUARD_PROBE_EVERY     6        // jedes 6. Fenster ungeschuetzt (Stichprobe: Welle noch da?)
 
 // Blaue Onboard-LED: leuchtet, solange gemint wird; kurz aus bei jedem Share. -1 = aus
 #define LED_PIN                  2
