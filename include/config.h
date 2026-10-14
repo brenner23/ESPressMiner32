@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 #define MINER_NAME        "ESPressMiner32"
-#define MINER_VERSION     "1.2.1"   // Master 003: v2-Hash-Schleife + SW-Miner Core 0
+#define MINER_VERSION     "1.3.0.005"   // Master 004, Schritt 005: Laufzeit-Kontrolle mit 2 Fenstern (25 %/256, 1 %/4096)
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
 // Difficulty, die beim Pool angefragt wird (mining.suggest_difficulty).
@@ -51,6 +51,28 @@
 // Zusaetzliche Takte zwischen START von Block 1 und dem ersten Block-2-Write
 // (die Engine liest T[0..7] erst nach START ein). Die Kalibrierung prueft das mit.
 #define HW_ASM_LOOP_GUARD        0
+
+// Master 004 Messbetrieb: >0 = Varianten der Hash-Schleife reihum je so viele Minuten
+// minen und Hashrate / verworfene Kandidaten je Variante protokollieren (Konsole, /api/stats).
+// 0 = Normalbetrieb.
+#ifndef HW_LOOP_TEST
+#define HW_LOOP_TEST             0
+#endif
+
+// Ueberhitzungsschutz (ab 1.3.0.004), Werte des internen Sensors (grob, +-10 Grad Versatz).
+// Ab SW_PAUSE pausiert der Software-Miner, ab STOP das ganze Mining; unter RESUME laeuft
+// alles wieder. Werte ausserhalb PLAUSIBLE gelten als Sensorfehler und werden ignoriert.
+#ifndef TEMP_SW_PAUSE_C
+#define TEMP_SW_PAUSE_C          90.0f
+#endif
+#ifndef TEMP_STOP_C
+#define TEMP_STOP_C              100.0f
+#endif
+#ifndef TEMP_RESUME_C
+#define TEMP_RESUME_C            80.0f
+#endif
+#define TEMP_PLAUSIBLE_MIN_C     (-20.0f)
+#define TEMP_PLAUSIBLE_MAX_C     150.0f
 
 // mDNS-Name (Standard fuer den Hostnamen)  ->  http://espressminer.local
 #define WEB_MDNS_NAME            "espressminer"

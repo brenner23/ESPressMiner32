@@ -306,14 +306,47 @@ typedef uint32_t (*HwV2Fn)(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_v2_fast(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_v2_margin(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_v2_wide(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+// Master 004: Testvarianten (Messbetrieb, siehe HW_LOOP_TEST)
+extern "C" uint32_t hw_t_quiet(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_r3(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_r2(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_r1(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_r2q(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_r1q(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_d_p1(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_d_p2(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_d_pl1(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_d_p3(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_d_pl2(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_d_q4(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_n(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 
 static const struct { HwV2Fn fn; const char* name; } s_v2[] = {
     { hw_v2_fast,   "v2 schnell (247 Takte)" },
     { hw_v2_margin, "v2 +2 Reserve (257 Takte)" },
     { hw_v2_wide,   "v2 breite Reserve (317 Takte)" },
+    // ab hier nur im Messbetrieb (nicht Teil der Rueckfallkette)
+    { hw_t_quiet,   "B ruhige Wartezeiten" },
+    { hw_t_r3,      "C Register, Abstand 3" },
+    { hw_t_r2,      "D Register, Abstand 2" },
+    { hw_t_r1,      "E Register, Abstand 1" },
+    { hw_t_r2q,     "F Register, Abstand 2, ruhig" },
+    { hw_t_r1q,     "G Register, Abstand 1, ruhig" },
+    { hw_t_d_p1,    "H D + p1 ruhig" },
+    { hw_t_d_p2,    "I D + p2 ruhig" },
+    { hw_t_d_pl1,   "J Register + pl1 ruhig (241 Takte)" },
+    { hw_t_d_p3,    "K D + p3 ruhig" },
+    { hw_t_d_pl2,   "L D + pl2 ruhig" },
+    { hw_t_d_q4,    "M D + ruhig ausser pl2" },
+    { hw_t_n,       "N D + p2 pl1 p3 ruhig" },
 };
-static const int V2_COUNT = sizeof(s_v2) / sizeof(s_v2[0]);
-static int s_v2Loop = -1;                  // -1 = klassische Schleife (Master 002)
+static const int V2_ALL   = sizeof(s_v2) / sizeof(s_v2[0]);
+// Rueckfallkette (Indizes in s_v2). Ab 1.3.0.002: J zuerst (Messbetrieb: 0 Fehler unter Last)
+static const int V2_CHAIN[] = { 11, 0, 1, 2 };
+static const int V2_COUNT   = sizeof(V2_CHAIN) / sizeof(V2_CHAIN[0]);
+static int s_chainPos = 0;
+static volatile bool s_testMode = false;   // Messbetrieb: keine automatischen Wechsel
+static volatile int s_v2Loop = -1;                  // -1 = klassische Schleife (Master 002)
 static volatile int s_v2Switches = 0;
 
 static uint32_t IRAM_ATTR hw_scan_v2(HwV2Fn fn, const uint32_t blk1[16], const uint32_t blk2[3],
@@ -377,14 +410,16 @@ bool hw_sha_select_loop()
         return false;
     }
     for (int n = 0; n < V2_COUNT; n++) {
+        const int v = V2_CHAIN[n];
         // Bester aus drei: ein einzelner Ausreisser soll die schnelle Stufe nicht kosten
         for (int tries = 0; tries < 3; tries++) {
             uint32_t t0 = millis();
-            bool ok = v2_selftest(s_v2[n].fn);
-            Serial.printf("  Schleife %-30s Known-Answer-Test %s (%lu ms)\n", s_v2[n].name,
+            bool ok = v2_selftest(s_v2[v].fn);
+            Serial.printf("  Schleife %-30s Known-Answer-Test %s (%lu ms)\n", s_v2[v].name,
                           ok ? "OK" : "FEHLER", (unsigned long)(millis() - t0));
             if (ok) {
-                s_v2Loop = n;
+                s_chainPos = n;
+                s_v2Loop = v;
                 return true;
             }
         }
@@ -397,21 +432,80 @@ bool hw_sha_select_loop()
 // bestaetigt, ist die Stufe auf diesem Chip zu knapp -> naechste, vorsichtigere.
 void hw_sha_report_candidate(bool confirmed)
 {
-    static uint32_t hits = 0, bad = 0;
-    if (s_v2Loop < 0) return;
-    hits++;
-    if (!confirmed) bad++;
-    if (hits < 256) return;
-    if (bad >= 8 && s_v2Loop + 1 < V2_COUNT) {
-        s_v2Loop++;
+    // Ab 1.3.0.005 zwei Fenster: kurze Fehlerschuebe (Nachtlauf .004: alle ~10 min 4-8 Stueck,
+    // im Schnitt 0,06 %) sind harmlos und duerfen nicht auf eine langsamere Stufe werfen.
+    //  - kurz: 256 Kandidaten (~35 s), wechseln erst ab 64 falschen (25 %) -> Variante wirklich kaputt
+    //  - lang: 4096 Kandidaten (~9 min), wechseln ab 41 falschen (> 1 %)
+    static uint32_t hitsS = 0, badS = 0, hitsL = 0, badL = 0;
+    if (s_v2Loop < 0 || s_testMode) return;
+    hitsS++; hitsL++;
+    if (!confirmed) { badS++; badL++; }
+
+    uint32_t bad = 0, hits = 0;
+    if (hitsS >= 256) {
+        if (badS >= 64) { bad = badS; hits = hitsS; }
+        hitsS = badS = 0;
+    }
+    if (!bad && hitsL >= 4096) {
+        if (badL >= 41) { bad = badL; hits = hitsL; }
+        hitsL = badL = 0;
+    }
+    if (bad && s_chainPos + 1 < V2_COUNT) {
+        s_chainPos++;
+        s_v2Loop = V2_CHAIN[s_chainPos];
         s_v2Switches++;
+        hitsS = badS = hitsL = badL = 0;
         Serial.printf("[HW-SHA] %lu von %lu Kandidaten falsch -> wechsle auf %s\n",
                       (unsigned long)bad, (unsigned long)hits, s_v2[s_v2Loop].name);
     }
-    hits = bad = 0;
 }
 
 const char* hw_sha_loop_name()
 {
     return s_v2Loop >= 0 ? s_v2[s_v2Loop].name : "klassisch (Master 002, kalibriert)";
+}
+
+// ---------------------------------------------------------------------------
+//  Master 004: Messbetrieb
+// ---------------------------------------------------------------------------
+int hw_sha_variant_count() { return V2_ALL; }
+
+const char* hw_sha_variant_name(int i) { return (i >= 0 && i < V2_ALL) ? s_v2[i].name : "?"; }
+
+bool hw_sha_variant_selftest(int i)
+{
+    return i >= 0 && i < V2_ALL && v2_selftest(s_v2[i].fn);
+}
+
+// Ueberlebt einen Neustart (nicht beim Einschalten): zuletzt aktive Variante
+static RTC_NOINIT_ATTR uint32_t s_rtcMagic;
+static RTC_NOINIT_ATTR int32_t  s_rtcVariant;
+
+void hw_sha_set_variant(int i)
+{
+    s_testMode = true;
+    if (i >= 0 && i < V2_ALL) s_v2Loop = i;
+    s_rtcMagic = 0x4C4F4F50;     // "LOOP"
+    s_rtcVariant = i;
+}
+
+// Variante, die vor dem letzten Neustart lief (-1 = keine / Kaltstart)
+int hw_sha_variant_before_reset()
+{
+    int v = (s_rtcMagic == 0x4C4F4F50) ? s_rtcVariant : -1;
+    s_rtcMagic = 0;
+    return v;
+}
+
+// Takte pro Nonce im reinen Durchlauf (ohne Betriebssystem-Last der Mining-Schleife)
+float hw_sha_variant_cycles(int i)
+{
+    uint32_t b1[16], b2[3], cands[8];
+    for (int k = 0; k < 16; k++) b1[k] = 0x01234567u * (k + 3);
+    for (int k = 0; k < 3; k++)  b2[k] = 0x89abcdefu * (k + 5);
+    int nc;
+    const uint32_t n = 200000;
+    uint32_t t0 = XTHAL_GET_CCOUNT();
+    hw_scan_v2(s_v2[i].fn, b1, b2, 0, n, cands, 8, &nc);
+    return (float)(XTHAL_GET_CCOUNT() - t0) / n;
 }

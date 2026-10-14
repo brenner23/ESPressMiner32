@@ -9,6 +9,52 @@
 #include <Arduino.h>
 #include <string.h>
 
+// ---------------------------------------------------------------------------
+//  Ueberhitzungsschutz (ab 1.3.0.004)
+// ---------------------------------------------------------------------------
+// Interner Sensor des klassischen ESP32: grob (Versatz bis +-10 Grad), auf manchen
+// Chips unbrauchbar -> unplausible Werte werden ignoriert, statt grundlos abzuschalten.
+// Stufen mit Rueckschalt-Abstand (Hysterese), damit nichts hin- und herspringt.
+namespace thermal {
+
+static volatile int      s_level = 0;
+static volatile uint32_t s_lastMs = 0;
+
+void update(float t)
+{
+    s_lastMs = millis();
+    g_stats.chipTemp = t;
+    if (t < TEMP_PLAUSIBLE_MIN_C || t > TEMP_PLAUSIBLE_MAX_C) return;   // Sensor-Unsinn
+    int lv = s_level;
+    if (t >= TEMP_STOP_C)                  lv = 2;
+    else if (t >= TEMP_SW_PAUSE_C)         lv = (lv == 2) ? 2 : 1;      // aus Stufe 2 erst unter RESUME
+    if (t < TEMP_RESUME_C)                 lv = 0;
+    if (lv != s_level) {
+        static const char* txt[] = { "normal", "Software-Miner pausiert", "Mining gestoppt" };
+        Serial.printf("[Temperatur] %.1f C -> %s\n", t, txt[lv]);
+        s_level = lv;
+    }
+}
+
+void poll()
+{
+    // Rueckfall, falls lange kein Pool-Job kam (z.B. Pool weg): selbst nachlesen
+    if (millis() - s_lastMs >= 60000UL) update(temperatureRead());
+}
+
+int level() { return s_level; }
+
+const char* text()
+{
+    switch (s_level) {
+        case 1:  return "Software-Miner pausiert (zu warm)";
+        case 2:  return "Mining gestoppt (zu warm)";
+        default: return "normal";
+    }
+}
+
+}  // namespace thermal
+
 namespace miner {
 
 // Prueft einen Kandidaten in Software und reicht ihn ggf. als Share ein
@@ -22,6 +68,7 @@ static void verify_candidate(const MiningJob& job, uint32_t nonce, bool fromHw)
     sha256d(header, 80, hash);
 
     g_stats.candidates++;
+    if (fromHw) g_stats.hwCandidates++;
     if (hash[31] != 0 || hash[30] != 0) {
         // Seltener, harmloser HW-Rechenfehler: hier abgefangen, bevor er zum Pool geht.
         // Wird nur gezaehlt (Diagnose), nicht bestraft - kein Share, kein Schaden.
@@ -91,6 +138,13 @@ static void mine_loop(ScanFn scan, bool isHw, uint32_t nonceStart, uint32_t nonc
 
         if (exhausted) {
             vTaskDelay(pdMS_TO_TICKS(20));
+            lastYield = millis();
+            continue;
+        }
+
+        // Ueberhitzungsschutz: SW-Miner ab Stufe 1, HW-Miner ab Stufe 2 pausieren
+        if (thermal::level() >= (isHw ? 2 : 1)) {
+            vTaskDelay(pdMS_TO_TICKS(500));
             lastYield = millis();
             continue;
         }

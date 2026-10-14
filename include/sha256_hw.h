@@ -42,3 +42,11 @@ void     hw_sha_set_guard(uint32_t g);   // nur Assembler-Schleife
 bool        hw_sha_select_loop();
 void        hw_sha_report_candidate(bool confirmed);   // Laufzeit-Kontrolle
 const char* hw_sha_loop_name();
+
+// Master 004: Messbetrieb (HW_LOOP_TEST) - Varianten der v2-Schleife durchprobieren
+int         hw_sha_variant_count();
+const char* hw_sha_variant_name(int i);
+bool        hw_sha_variant_selftest(int i);   // Known-Answer-Test (Engine muss frei sein)
+float       hw_sha_variant_cycles(int i);     // Takte/Nonce (Engine muss frei sein)
+void        hw_sha_set_variant(int i);        // schaltet auch die Auto-Wechsel ab
+int         hw_sha_variant_before_reset();    // -1 = keine

@@ -1,11 +1,14 @@
 #include "stats.h"
 #include "sha256_hw.h"
+#include "miner.h"
 #include "config.h"
 #include "mining_job.h"
 #include "utils.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
+
+char g_loopTest[1600] = "";
 
 MinerStats g_stats = {};
 
@@ -28,6 +31,7 @@ void stats_task(void*)
 
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(STATS_INTERVAL_MS));
+        thermal::poll();
 
         uint32_t hw = g_stats.hwHashes;
         uint32_t sw = g_stats.swHashes;
@@ -72,8 +76,8 @@ void stats_task(void*)
         static uint32_t lastId = 0;
         if (now - lastId >= 60000UL) {
             lastId = now;
-            Serial.printf("           " MINER_NAME " v" MINER_VERSION "  | HW-Schleife: %s\n",
-                          hw_sha_loop_name());
+            Serial.printf("           " MINER_NAME " v" MINER_VERSION "  | HW-Schleife: %s | Chip %.1f C (grob)\n",
+                          hw_sha_loop_name(), g_stats.chipTemp);
         }
 
         if (g_stats.hwErrors) {

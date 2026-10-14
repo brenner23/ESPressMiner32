@@ -92,6 +92,7 @@ border-radius:8px;padding:9px 10px;font-size:14px}
  <tr><td>Netz-Difficulty</td><td id="ndiff">-</td></tr>
  <tr><td>Bl&ouml;cke gefunden</td><td id="blk">-</td></tr>
  <tr><td>WLAN</td><td id="wifi">-</td></tr>
+ <tr><td>Chip-Temperatur (grob)</td><td id="ctemp">-</td></tr>
  <tr><td>Freier Speicher</td><td id="heap">-</td></tr>
  <tr><td>Firmware</td><td id="ver">-</td></tr>
  <tr><td>Projekt</td><td><a href="https://github.com/brenner23/ESPressMiner32" target="_blank" rel="noopener" style="color:inherit">GitHub</a></td></tr>
@@ -211,7 +212,8 @@ async function tick(){try{const s=await(await fetch('/api/stats')).json();
  $('pd').className='dot'+(s.authorized?' on':'');$('pname').textContent=s.poolName+(s.poolAltMin?' ⇆ alle '+s.poolAltMin+' min':'');$('user').textContent=s.user;
  $('swbtn').style.display=s.hasSecondary?'':'none';
  $('pdiff').textContent=fd(s.poolDiff);$('ndiff').textContent=fd(s.netDiff);$('blk').textContent=s.blocks;
- $('wifi').textContent=s.ip+' · '+s.rssi+' dBm';$('heap').textContent=(s.heap/1024).toFixed(1)+' KB';
+ $('wifi').textContent=s.ip+' · '+s.rssi+' dBm';
+ $('ctemp').textContent=(s.chipTemp?s.chipTemp.toFixed(1)+' °C':'-')+(s.thermalLevel?' · '+s.thermal:'');$('heap').textContent=(s.heap/1024).toFixed(1)+' KB';
  $('ver').textContent=s.version;draw(s.history);if(s.portal&&!portal){portal=true;openCfg()}}catch(e){$('pd').className='dot'}}
 tick();setInterval(tick,3000);addEventListener('resize',()=>{if(lastHist.length)draw(lastHist)});
 </script></body></html>)rawliteral";

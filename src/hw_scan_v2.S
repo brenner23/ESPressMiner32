@@ -227,4 +227,168 @@
     PL_MINE hw_v2_margin, .iram1.hwv2m,  6, 16, 42, 12, 14, 29, 12, 2, 1
     PL_MINE hw_v2_wide,   .iram1.hwv2w, 18, 16, 54, 24, 14, 41, 24, 2, 1
 
+// ---------------------------------------------------------------------------
+//  Master 004 (eigene Erweiterung): Header-Woerter 0..7 dauerhaft in Registern
+// ---------------------------------------------------------------------------
+// Einzige Arbeit bei stehender Engine ist das Zurueckschreiben von T[0..7] nach
+// dem letzten LOAD. In PL_MINE kostet das je Wort l32i + s32i + nop (3 Takte).
+// Hier liegen die 8 Woerter in a5, a9..a15, jeder Write ist ein einzelner
+// s32i.n; rgap = nops danach (Abstand = 1 + rgap Takte). Das Budget wandert
+// dafuer in den Speicher (ctx), gezaehlt in W1, wo die Engine ohnehin rechnet:
+// die Befehle ersetzen die 5 Fuell-nops von PL_MINE, W1 bleibt gleich lang.
+// Alle anderen Phasen (W1-Fuellung, W2, W3, Wartezeiten) sind unveraendert.
+// Register: a2 T-Basis, a3 ctx, a4 Nonce, a6 Steuerwert / H7, a7 Zwischenwert,
+//           a8 Null, a5 a9 a10 a11 a12 a13 a14 a15 = Header-Woerter 0..7
+
+    .macro HDRR reg, k, lpos, rgap
+    s32i.n  \reg, a2, \k * 4
+    NOPS    \rgap
+    .if \lpos == \k + 1
+    l16ui   a6, a2, 28          // untere 16 Bit von H7: 0 = Kandidat
+    .endif
+    .endm
+
+    .macro PL_MINE_R name, sect, p1, d2, p2, pl1, d3, p3, pl2, lpos, wgap, rgap
+    .section \sect, "ax"
+    .global \name
+    .type   \name, @function
+    .balign 4
+\name:
+    entry   a1, 32
+    l32i    a4, a3, CTX_NONCE
+    l32i    a5, a3, 0
+    l32i    a9, a3, 4
+    l32i    a10, a3, 8
+    l32i    a11, a3, 12
+    l32i    a12, a3, 16
+    l32i    a13, a3, 20
+    l32i    a14, a3, 24
+    l32i    a15, a3, 28
+    movi.n  a8, 0
+    ENGINE_SETTLE
+    COPY    0, 0, \wgap
+    COPY    4, 4, \wgap
+    COPY    8, 8, \wgap
+    COPY    12, 12, \wgap
+    COPY    16, 16, \wgap
+    COPY    20, 20, \wgap
+    COPY    24, 24, \wgap
+    COPY    28, 28, \wgap
+    COPY    32, 32, \wgap
+    COPY    36, 36, \wgap
+    COPY    40, 40, \wgap
+    COPY    44, 44, \wgap
+    COPY    48, 48, \wgap
+    COPY    52, 52, \wgap
+    COPY    56, 56, \wgap
+    COPY    60, 60, \wgap
+    movi.n  a6, 1
+    s32i    a6, a2, R_START
+    j       .Lhead_\name
+
+    .balign 4
+.Lw2b_\name:
+    NOPS    \p2
+    s32i    a6, a2, R_LOAD      // ===== LOAD Digest 1 -> T[0..7] =====
+    NOPS    \pl1
+    s32i    a6, a2, R_START     // ===== START Hash 2 =====
+    NOPS    \d3
+    COPY    32, 32, \wgap
+    COPY    36, 36, \wgap
+    COPY    40, 40, \wgap
+    COPY    44, 44, \wgap
+    COPY    48, 48, \wgap
+    COPY    52, 52, \wgap
+    COPY    56, 56, \wgap
+    COPY    60, 60, \wgap
+    NOPS    \p3
+    s32i    a6, a2, R_LOAD      // ===== LOAD Digest 2 -> T[0..7] =====
+    NOPS    \pl2
+
+    // Engine steht: T[0..7] aus Registern
+    HDRR    a5,  0, \lpos, \rgap
+    HDRR    a9,  1, \lpos, \rgap
+    HDRR    a10, 2, \lpos, \rgap
+    HDRR    a11, 3, \lpos, \rgap
+    HDRR    a12, 4, \lpos, \rgap
+    HDRR    a13, 5, \lpos, \rgap
+    HDRR    a14, 6, \lpos, \rgap
+    HDRR    a15, 7, \lpos, \rgap
+    movi.n  a7, 1
+    s32i    a7, a2, R_START     // ===== START Block 1 (naechste Nonce) =====
+
+.Lhead_\name:
+    // W1: gleiche Laenge wie PL_MINE (dort 5 nops + Budget in a5)
+    NOPS    2
+    beqz    a6, .Lhit_\name
+    l32i    a7, a3, CTX_BUDGET
+    beqz    a7, .Lstop_\name
+    addi.n  a7, a7, -1
+    s32i    a7, a3, CTX_BUDGET
+    l32i    a7, a3, CTX_RUN
+    beqz    a7, .Lstop_\name
+    movi.n  a6, 1
+
+    COPY    CTX_HDR16, 0, \wgap
+    COPY    CTX_HDR16 + 4, 4, \wgap
+    COPY    CTX_HDR16 + 8, 8, \wgap
+    l32i    a7, a3, CTX_PAD
+    s32i.n  a4, a2, 12          // Nonce
+    addi.n  a4, a4, 1
+    NOPS    \wgap
+    s32i.n  a7, a2, 16          // 0x80000000
+    nop.n
+    NOPS    \wgap
+    ZERO    20, \wgap
+    ZERO    24, \wgap
+    ZERO    28, \wgap
+    ZERO    32, \wgap
+    ZERO    36, \wgap
+    ZERO    40, \wgap
+    ZERO    44, \wgap
+    ZERO    48, \wgap
+    ZERO    52, \wgap
+    ZERO    56, \wgap
+    movi    a7, 640
+    s32i.n  a7, a2, 60
+    NOPS    \p1
+    s32i    a6, a2, R_CONT      // ===== CONTINUE Block 2 =====
+
+    NOPS    \d2
+    COPY    CTX_PAD, 32, \wgap
+    movi    a7, 256
+    s32i.n  a7, a2, 60
+    j       .Lw2b_\name
+
+.Lhit_\name:
+    movi.n  a6, 1
+    j       .Lout_\name
+.Lstop_\name:
+    movi.n  a6, 0
+.Lout_\name:
+    ENGINE_SETTLE
+    s32i    a4, a3, CTX_NONCE
+    mov.n   a2, a6
+    retw.n
+    .size   \name, . - \name
+    .endm
+
+    // Testvarianten fuer den Messbetrieb (HW_LOOP_TEST in config.h):
+    //   ruhige Wartezeiten = NerdMiner-Messung ohne Busverkehr auf Core 0
+    PL_MINE   hw_t_quiet, .iram1.hwtq,  3, 16, 39,  9, 14, 26,  9, 2, 1
+    PL_MINE_R hw_t_r3,    .iram1.hwtr3, 4, 16, 40, 10, 14, 27, 10, 2, 1, 2
+    PL_MINE_R hw_t_r2,    .iram1.hwtr2, 4, 16, 40, 10, 14, 27, 10, 2, 1, 1
+    PL_MINE_R hw_t_r1,    .iram1.hwtr1, 4, 16, 40, 10, 14, 27, 10, 2, 1, 0
+    PL_MINE_R hw_t_r2q,   .iram1.hwtr2q,3, 16, 39,  9, 14, 26,  9, 2, 1, 1
+    PL_MINE_R hw_t_r1q,   .iram1.hwtr1q,3, 16, 39,  9, 14, 26,  9, 2, 1, 0
+    // D + jeweils eine ruhige Wartezeit, und D + alle ruhigen ausser pl2
+    PL_MINE_R hw_t_d_p1,  .iram1.hwtd1, 3, 16, 40, 10, 14, 27, 10, 2, 1, 1
+    PL_MINE_R hw_t_d_p2,  .iram1.hwtd2, 4, 16, 39, 10, 14, 27, 10, 2, 1, 1
+    PL_MINE_R hw_t_d_pl1, .iram1.hwtd3, 4, 16, 40,  9, 14, 27, 10, 2, 1, 1
+    PL_MINE_R hw_t_d_p3,  .iram1.hwtd4, 4, 16, 40, 10, 14, 26, 10, 2, 1, 1
+    PL_MINE_R hw_t_d_pl2, .iram1.hwtd5, 4, 16, 40, 10, 14, 27,  9, 2, 1, 1
+    PL_MINE_R hw_t_d_q4,  .iram1.hwtd6, 3, 16, 39,  9, 14, 26, 10, 2, 1, 1
+    // Runde 2: p1 unter Last NICHT ruhig (H: 13,7 % Fehler) -> D + p2, pl1, p3 ruhig
+    PL_MINE_R hw_t_n,     .iram1.hwtn,  4, 16, 39,  9, 14, 26, 10, 2, 1, 1
+
 #endif

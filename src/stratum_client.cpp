@@ -3,6 +3,7 @@
 #include "mining_job.h"
 #include "sha256_sw.h"
 #include "stats.h"
+#include "miner.h"
 #include "utils.h"
 #include "settings.h"
 
@@ -227,6 +228,10 @@ void StratumClient::handleNotify(JsonArrayConst p)
     _notify.ntime    = p[7].as<const char*>();
     _notify.valid    = true;
     g_stats.jobsReceived++;
+    // Chip-Temperatur nur bei neuem Job lesen: Core 0 ist hier ohnehin mit Netzwerk
+    // beschaeftigt, ein zusaetzlicher Registerzugriff alle 30-60 s faellt nicht ins Gewicht.
+    // Interner Sensor des klassischen ESP32: undokumentiert, grob (+-10 Grad Versatz).
+    thermal::update(temperatureRead());   // + Ueberhitzungsschutz
 
     buildAndPublishJob();
 }

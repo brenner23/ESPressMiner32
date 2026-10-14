@@ -1,3 +1,4 @@
+#include "miner.h"
 #include "sha256_hw.h"
 #include "web_server.h"
 #include "config.h"
@@ -36,6 +37,13 @@ static void handle_stats()
     doc["hwHashes"]    = (double)g_stats.hwHashes;
     doc["swHashes"]    = (double)g_stats.swHashes;
     doc["hwLoop"]      = hw_sha_loop_name();
+    doc["hwCandidates"]= g_stats.hwCandidates;
+    if (g_loopTest[0]) doc["loopTest"] = g_loopTest;
+    doc["resetReason"] = g_resetReason;
+    doc["chipTemp"]    = g_stats.chipTemp;
+    doc["thermal"]     = thermal::text();
+    doc["thermalLevel"]= thermal::level();
+    if (g_variantBeforeReset >= 0) doc["variantBeforeReset"] = hw_sha_variant_name(g_variantBeforeReset);
     doc["bestDiff"]    = g_stats.bestDiff;
     doc["poolDiff"]    = jobs::difficulty();
     doc["netDiff"]     = g_stats.networkDiff;
