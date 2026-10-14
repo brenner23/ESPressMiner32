@@ -135,10 +135,14 @@ void task(void*)
             if (inWin && !probe) g_stats.guardErrors += e - lastErr;
             if (!firstErrMs || now - firstErrMs > HW_GUARD_BURST_MS) { firstErrMs = now; errsInBurst = 0; }
             errsInBurst += e - lastErr;
+            const uint32_t lastErrPrev = lastErr;
             lastErr = e;
             if (errsInBurst >= HW_GUARD_BURST_ERRORS && (!burstLock || now - burstLock > 30000UL)) {
                 burstLock = now;
+                g_stats.burstErrors += errsInBurst;
                 on_burst(firstErrMs);
+            } else if (burstLock && now - burstLock <= HW_GUARD_BURST_MS) {
+                g_stats.burstErrors += e - lastErrPrev;              // Nachzuegler desselben Schubs
             }
         }
 

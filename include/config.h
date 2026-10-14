@@ -4,10 +4,12 @@
 // ---------------------------------------------------------------------------
 
 #define MINER_NAME        "ESPressMiner32"
-#if DIAG_NET
-#define MINER_VERSION     "1.3.0.008-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
+#if HW_LOOP_TEST
+#define MINER_VERSION     "1.3.0.009-looptest"   // Messbetrieb: Varianten O/P/Q/R gegen J, mit Schutzfenster
+#elif DIAG_NET
+#define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.0.008"   // Master 004, Schritt 008: WLAN-Waechter + Schutzfenster gegen die 10-Minuten-Welle
+#define MINER_VERSION     "1.3.0.009"   // Master 004, Schritt 009: Schleife O (240 Takte, ~1023 kH/s), Rueckfall J
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
@@ -112,7 +114,13 @@
 #define HW_GUARD_PERIOD_MAX_MS   1800000UL
 #define HW_GUARD_BEFORE_MS       6000UL   // Fenster vor ...
 #define HW_GUARD_AFTER_MS        6000UL   // ... und nach dem erwarteten Schub
+#ifndef HW_GUARD_PROBE_EVERY
+#if HW_LOOP_TEST
+#define HW_GUARD_PROBE_EVERY     1000000  // Messbetrieb: keine Stichprobe (Welle soll nie ins Ergebnis)
+#else
 #define HW_GUARD_PROBE_EVERY     6        // jedes 6. Fenster ungeschuetzt (Stichprobe: Welle noch da?)
+#endif
+#endif
 
 // Blaue Onboard-LED: leuchtet, solange gemint wird; kurz aus bei jedem Share. -1 = aus
 #define LED_PIN                  2

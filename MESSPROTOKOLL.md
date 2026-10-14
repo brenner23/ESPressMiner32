@@ -17,6 +17,9 @@ Effektive Hashrate = Hashrate x (1 - Fehlerquote).
 | 1.3.0.003 | + Chip-Temperatur (grob) im Dashboard/API/Konsole | 240 | 989 | 1 in ~1000 Kand. (erste Minute) | Nachtlauf 13./14.10. |
 | 1.3.0.004 | + Ueberhitzungsschutz (90/100/80 C) | 240 | 989 | J: 0,06 %, nach 1,9 h Rueckfall auf A | Nacht: 0 Neustarts, ~992 auf A |
 | 1.3.0.005 | Laufzeit-Kontrolle mit 2 Fenstern (25 %/256, 1 %/4096) | 240 | 989 | – | geflasht 14.10. 09:17, Langzeitlauf |
+| 1.3.0.008 | WLAN-Waechter + Schutzfenster | 240 | 989 | Welle 0 statt 6–7 | ~1019–1020 gesamt |
+| 1.3.0.009 | Schleife O (p2 39) | 239,9 | ~995 | 0 | **~1024 gesamt** |
+| 1.3.0.010 | Anzeige + schneller SW-Scan (Versuch) | 239,9 | ~995 + SW 34 | ~10–12 % | verworfen |
 
 ## 1.3.0.001 – Messbetrieb (Firmware zeigt noch "1.3.0-dev")
 
@@ -193,6 +196,47 @@ Ergebnis (14.10., 12:12–14:00, 10 Schuebe):
 - Danach (gebaut, noch nicht auf dem Board getestet): Wecker v2 (Startwert 600 s schon nach dem 1. Schub,
   beliebiger Takt, Stichproben) + Test-Eingang `/api/guardsim?n=3` nur im Diag-Build (gespielte Fehlerschuebe,
   zaehlen nicht in hwErrors). Geplant: Phasen 60 s / 120 s / unregelmaessig / Stille.
+
+## 1.3.0.009 – Schleife O (240 Takte), Messbetrieb J/O/P/Q/R
+
+Messbetrieb `1.3.0.009-looptest` (14.10. ab 15:09), je 10 min pro Variante. Neu: Fehler im Schutzfenster
+und in erkannten Schueben zaehlen als „Welle“ und nicht gegen die Variante.
+
+| Var | Aenderung (gegen J) | Takte | KAT | eigene Fehler | Welle |
+|---|---|---|---|---|---|
+| J | Referenz (p2 40, pl1 9) | 240,9 | OK | 0 | 3 (Start) |
+| O | p2 39 | 239,9 | OK | **0** | 0 (Fenster 15:30 sauber) |
+| P | O + p2 38 | – | **FAILED** | – | – |
+| Q | O + pl1 8 | – | **FAILED** | – | – |
+| R | O + d2 15 | – | **FAILED** | – | – |
+
+Damit stehen alle fuenf Wartezeiten der Engine am Limit (d2/d3 verschieben nur Arbeit innerhalb
+CONTINUE->LOAD bzw. START->LOAD und bringen keinen eigenen Takt):
+
+| Abschnitt | Grenze | Beleg |
+|---|---|---|
+| CONTINUE -> LOAD Block 2 (d2 + p2) | O | P, R KAT FAILED |
+| LOAD -> START Hash 2 (pl1) | 9 | Q KAT FAILED |
+| START -> LOAD Hash 2 (d3 + p3) | 27 | K 4,6 %, N 14,9 % |
+| LOAD -> Header-Writes (pl2) | 10 | L Fehler |
+| START Block 1 -> CONTINUE (p1) | 4 | H 13,7 % unter Last |
+| Abstand SHA-Writes | 2 Takte | E Fehler |
+
+1.3.0.009 = O als Hauptschleife, Rueckfallkette O -> J -> A -> +2 -> breit. Geflasht 15:39 (Display ~1024–1025),
+nach dem Versuch 1.3.0.010 erneut 15:56: 0 Fehler bei 816 Kandidaten in der ersten Minute, ~1024 kH/s.
+Backup `ESPressMiner32_v1.3.0.009_O_1024khs.zip` + `firmware_v1.3.0.009.bin`.
+
+## 1.3.0.010 – Versuch, verworfen (nicht auf GitHub)
+
+Zwei Aenderungen auf einmal (gegen die eigene Regel): (1) Dashboard: 1-s-Wert ohne Komma, Mittel 10 min;
+(2) schneller Software-Scan auf Core 0 (Runden 0..2 vorberechnet, feste W-Woerter eingerechnet, Hash 2 nach
+Runde 60 beendet). Der schnelle Pfad ist in Python und auf dem Chip gegen die Referenz geprueft (0 Abweichungen)
+und bringt **SW 30 -> 34 kH/s** (Benchmark 36,8), gesamt 1028–1031.
+Aber: **~12 % HW-Fehler** (127 von 983 Kandidaten in 55 s). Mit abgeschaltetem schnellem Pfad (`SW_FAST_SCAN 0`)
+weiter ~10 %, 1.3.0.009 direkt danach 0 Fehler bei gleicher Temperatur (67 C).
+-> Ursache liegt nicht (nur) im SW-Scan. Verdacht: geaenderte IRAM-Lage der HW-Schleife oder der 1-s-Takt der
+Statistik auf Core 0. Naechster Versuch getrennt: erst nur die Anzeige, dann der SW-Scan.
+Stand gesichert: `backups/ESPressMiner32_v1.3.0.010-versuch_Fehler.zip`.
 
 ## Ideen fuer spaeter (nach dem Ausreizen)
 

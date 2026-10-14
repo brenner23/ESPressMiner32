@@ -2,6 +2,13 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.0.009 – Master 004 (2026-10-14) – Schleife O, ~1024 kH/s
+- Hash-Schleife **O** (J mit einem Takt weniger vor dem LOAD von Block 2, 240 Takte) als Hauptschleife,
+  Rueckfall O -> J -> A -> +2 -> breit. **~1024 kH/s** (HW ~995 + SW ~30).
+- Messbetrieb J/O/P/Q/R: O 0 eigene Fehler; P, Q, R (je ein weiterer Takt weniger) scheitern schon am
+  Selbsttest. Damit stehen alle Wartezeiten der SHA-Engine am Limit (Tabelle im MESSPROTOKOLL).
+- Messbetrieb trennt jetzt Fehler der Schleife von Fehlern der WLAN-Welle.
+
 ## v1.3.0.008 – Master 004 (2026-10-14) – Entwicklungsstand (noch kein Release v1.3.0)
 Schritte 1.3.0.001–.008 im Detail mit Messwerten: MESSPROTOKOLL.md.
 - Hash-Schleife **J** (Header-Woerter in Registern, 241 Takte) als Hauptschleife, Rueckfall J -> A -> +2 -> breit.

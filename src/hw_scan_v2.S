@@ -390,5 +390,11 @@
     PL_MINE_R hw_t_d_q4,  .iram1.hwtd6, 3, 16, 39,  9, 14, 26, 10, 2, 1, 1
     // Runde 2: p1 unter Last NICHT ruhig (H: 13,7 % Fehler) -> D + p2, pl1, p3 ruhig
     PL_MINE_R hw_t_n,     .iram1.hwtn,  4, 16, 39,  9, 14, 26, 10, 2, 1, 1
+    // 1.3.0.009: I und D hatten ihre Fehler nur durch die WLAN-Welle -> I + J kombinieren
+    // und Block 2 / LOAD->START weiter kuerzen (p3 und p1 bleiben sicher, siehe K und H)
+    PL_MINE_R hw_t_o,     .iram1.hwto,  4, 16, 39,  9, 14, 27, 10, 2, 1, 1
+    PL_MINE_R hw_t_p,     .iram1.hwtp,  4, 16, 38,  9, 14, 27, 10, 2, 1, 1
+    PL_MINE_R hw_t_q,     .iram1.hwtq2, 4, 16, 39,  8, 14, 27, 10, 2, 1, 1
+    PL_MINE_R hw_t_r,     .iram1.hwtr,  4, 15, 39,  9, 14, 27, 10, 2, 1, 1
 
 #endif

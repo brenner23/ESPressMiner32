@@ -24,8 +24,9 @@ static StratumClient g_stratum;
 #if HW_LOOP_TEST
 // Reihenfolge: A = v2 schnell (Referenz), dann B..G (siehe hw_scan_v2.S)
 // Runde 2 (nach Runde 1: H/M fallen unter Last durch, p1 muss 4 bleiben)
-static const int  LT_IDX[]   = { 10, 11, 12, 15, 5, 0 };
-static const char LT_TAG[]   = "IJKNDA";
+// 1.3.0.009: J (Referenz) gegen die Feinvarianten O/P/Q/R (siehe hw_scan_v2.S)
+static const int  LT_IDX[]   = { 11, 16, 17, 18, 19 };
+static const char LT_TAG[]   = "JOPQR";
 static const int  LT_N       = sizeof(LT_IDX) / sizeof(LT_IDX[0]);
 static bool  s_ltOk[LT_N];
 static float s_ltCyc[LT_N];
@@ -46,7 +47,9 @@ static void loop_test_prepare()
 // Waehrend des Minings: reihum je HW_LOOP_TEST Minuten, Summen je Variante
 static void loop_test_task(void*)
 {
-    uint64_t sumH[LT_N] = {}; uint32_t sumC[LT_N] = {}, sumE[LT_N] = {}; float sumT[LT_N] = {};
+    // sumE = Fehler AUSSERHALB von Schutzfenster und erkannten Schueben (= Fehler der Schleife selbst),
+    // sumW = Fehler der WLAN-Welle (im Fenster oder als Schub erkannt) - zaehlen nicht gegen die Variante
+    uint64_t sumH[LT_N] = {}; uint32_t sumC[LT_N] = {}, sumE[LT_N] = {}, sumW[LT_N] = {}; float sumT[LT_N] = {};
     vTaskDelay(pdMS_TO_TICKS(15000));          // Pool-Verbindung abwarten
     for (int round = 1;; round++) {
         for (int k = 0; k < LT_N; k++) {
@@ -54,32 +57,39 @@ static void loop_test_task(void*)
             hw_sha_set_variant(LT_IDX[k]);
             vTaskDelay(pdMS_TO_TICKS(3000));    // Umschalten abwarten
             const uint32_t h0 = g_stats.hwHashes, c0 = g_stats.hwCandidates, e0 = g_stats.hwErrors;
+            const uint32_t w0 = g_stats.guardErrors + g_stats.burstErrors;
             const uint32_t t0 = millis();
             // jede Minute: neue Fehler dieser Minute (Verlauf statt nur Summe)
             for (int m = 1; m <= HW_LOOP_TEST; m++) {
                 const uint32_t cm = g_stats.hwCandidates, em = g_stats.hwErrors;
+                const uint32_t wm = g_stats.guardErrors + g_stats.burstErrors;
                 vTaskDelay(pdMS_TO_TICKS(60000UL));
-                Serial.printf("[Loop test] %c minute %d: %lu candidates, %lu discarded\n", LT_TAG[k], m,
-                              (unsigned long)(g_stats.hwCandidates - cm), (unsigned long)(g_stats.hwErrors - em));
+                const uint32_t wave = g_stats.guardErrors + g_stats.burstErrors - wm;
+                Serial.printf("[Loop test] %c minute %d: %lu candidates, %lu discarded (%lu of them WiFi wave)\n",
+                              LT_TAG[k], m, (unsigned long)(g_stats.hwCandidates - cm),
+                              (unsigned long)(g_stats.hwErrors - em), (unsigned long)wave);
             }
             const float dt = (millis() - t0) / 1000.0f;
             sumH[k] += (uint32_t)(g_stats.hwHashes - h0);
             sumC[k] += g_stats.hwCandidates - c0;
-            sumE[k] += g_stats.hwErrors - e0;
+            const uint32_t w = g_stats.guardErrors + g_stats.burstErrors - w0;
+            const uint32_t eAll = g_stats.hwErrors - e0;
+            sumW[k] += w;
+            sumE[k] += eAll > w ? eAll - w : 0;
             sumT[k] += dt;
 
             // Bericht: HW-Hashrate, Fehlerquote = verworfene / alle HW-Kandidaten,
             // effektiv = Hashrate * (1 - Fehlerquote)
             int len = snprintf(g_loopTest, sizeof(g_loopTest),
-                               "Round %d | var | kH/s HW | cycles(bench) | cand | discarded | error%% | effective\n", round);
+                               "Round %d | var | kH/s HW | cycles(bench) | cand | own errors | wave | own error%% | effective\n", round);
             for (int j = 0; j < LT_N && len < (int)sizeof(g_loopTest) - 120; j++) {
                 if (!sumT[j]) continue;
                 const float kh  = sumH[j] / sumT[j] / 1000.0f;
                 const float err = sumC[j] ? 100.0f * sumE[j] / sumC[j] : 0.0f;
                 len += snprintf(g_loopTest + len, sizeof(g_loopTest) - len,
-                                "%c %-28s | %6.1f | %5.1f | %6lu | %5lu | %6.3f | %6.1f\n", LT_TAG[j],
+                                "%c %-28s | %6.1f | %5.1f | %6lu | %5lu | %4lu | %6.3f | %6.1f\n", LT_TAG[j],
                                 hw_sha_variant_name(LT_IDX[j]), kh, s_ltCyc[j], (unsigned long)sumC[j],
-                                (unsigned long)sumE[j], err, kh * (1.0f - err / 100.0f));
+                                (unsigned long)sumE[j], (unsigned long)sumW[j], err, kh * (1.0f - err / 100.0f));
             }
             Serial.print("[Loop test]\n");
             Serial.print(g_loopTest);

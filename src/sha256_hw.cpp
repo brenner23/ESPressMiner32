@@ -320,6 +320,10 @@ extern "C" uint32_t hw_t_d_p3(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_t_d_pl2(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_t_d_q4(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_t_n(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_o(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_p(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_q(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+extern "C" uint32_t hw_t_r(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 
 static const struct { HwV2Fn fn; const char* name; } s_v2[] = {
     { hw_v2_fast,   "v2 fast (247 cycles)" },
@@ -339,10 +343,15 @@ static const struct { HwV2Fn fn; const char* name; } s_v2[] = {
     { hw_t_d_pl2,   "L D + pl2 quiet" },
     { hw_t_d_q4,    "M D + quiet except pl2" },
     { hw_t_n,       "N D + p2 pl1 p3 quiet" },
+    { hw_t_o,       "O registers + p2 pl1 quiet (240 cycles)" },
+    { hw_t_p,       "P O + p2 -1" },
+    { hw_t_q,       "Q O + pl1 -1" },
+    { hw_t_r,       "R O + d2 -1" },
 };
 static const int V2_ALL   = sizeof(s_v2) / sizeof(s_v2[0]);
 // Rueckfallkette (Indizes in s_v2). Ab 1.3.0.002: J zuerst (Messbetrieb: 0 Fehler unter Last)
-static const int V2_CHAIN[] = { 11, 0, 1, 2 };
+// Ab 1.3.0.009: O zuerst (1 Takt schneller als J, Messbetrieb 0 eigene Fehler), dann J
+static const int V2_CHAIN[] = { 16, 11, 0, 1, 2 };
 static const int V2_COUNT   = sizeof(V2_CHAIN) / sizeof(V2_CHAIN[0]);
 static int s_chainPos = 0;
 static volatile bool s_testMode = false;   // Messbetrieb: keine automatischen Wechsel
@@ -465,14 +474,17 @@ void hw_sha_report_candidate(bool confirmed)
 // Ab 1.3.0.008: Schutzfenster. Waehrend der erwarteten Stoerung (siehe miner.cpp, guard)
 // rechnet der HW-Miner kurz mit der vorsichtigeren Stufe "v2 +2 margin" (257 Takte).
 
+static volatile int s_beforeWindow = -1;   // Messbetrieb: Variante vor dem Fenster
+
 void hw_sha_guard(bool on)
 {
-    if (on == s_window || s_testMode) return;
+    if (on == s_window) return;
     s_window = on;
     if (on) {
-        if (s_v2Loop >= 0 && s_v2Loop != V2_GUARD) s_v2Loop = V2_GUARD;
+        s_beforeWindow = s_v2Loop;
+        if (s_v2Loop >= 0) s_v2Loop = V2_GUARD;
     } else if (s_v2Loop >= 0) {
-        s_v2Loop = V2_CHAIN[s_chainPos];
+        s_v2Loop = s_testMode ? s_beforeWindow : V2_CHAIN[s_chainPos];
     }
 }
 
@@ -502,7 +514,10 @@ static RTC_NOINIT_ATTR int32_t  s_rtcVariant;
 void hw_sha_set_variant(int i)
 {
     s_testMode = true;
-    if (i >= 0 && i < V2_ALL) s_v2Loop = i;
+    if (i >= 0 && i < V2_ALL) {
+        if (s_window) s_beforeWindow = i;      // Fenster offen: nach dem Fenster diese Variante
+        else s_v2Loop = i;
+    }
     s_rtcMagic = 0x4C4F4F50;     // "LOOP"
     s_rtcVariant = i;
 }
