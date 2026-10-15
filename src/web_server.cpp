@@ -73,6 +73,8 @@ static void handle_stats()
     doc["guardBursts"] = g_stats.guardBursts;
     doc["guardWindows"]= g_stats.guardWindows;
     doc["guardErrors"] = g_stats.guardErrors;
+    doc["waveErrors"]  = g_stats.waveErrors;    // Pre 4: Anteil von hwErrors aus WLAN-Wellen
+    doc["loopErrors"]  = g_stats.hwErrors - g_stats.waveErrors;   // echte Fehler der Schleife
     doc["heap"]        = ESP.getFreeHeap();
     doc["version"]     = MINER_NAME " v" MINER_VERSION;
 

@@ -32,6 +32,7 @@ struct MinerStats {
     volatile uint32_t guardWindows;     // geoeffnete Schutzfenster
     volatile uint32_t guardErrors;      // HW-Fehler innerhalb eines Schutzfensters
     volatile uint32_t burstErrors;      // HW-Fehler, die zu einem erkannten Schub gehoeren
+    volatile uint32_t waveErrors;       // Pre 4: HW-Fehler aus WLAN-Wellen (Schub oder Fenster), jeder Fehler genau 1x
     volatile uint32_t guardPeriodMs;    // gelernter Takt (0 = noch unbekannt)
     volatile int32_t  guardNextInS;     // naechstes Fenster in s (-1 = unbekannt)
 

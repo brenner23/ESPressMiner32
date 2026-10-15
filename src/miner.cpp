@@ -8,6 +8,7 @@
 
 #include <Arduino.h>
 #include <string.h>
+#include <xtensa/xtruntime.h>   // XTOS_SET_INTLEVEL (Pre 1: HW_IRQ_LOCK)
 
 // ---------------------------------------------------------------------------
 //  Ueberhitzungsschutz (ab 1.3.0.004)
@@ -123,6 +124,7 @@ void task(void*)
 {
 #if HW_GUARD_ENABLE
     uint32_t lastErr = g_stats.hwErrors + g_simErrors, firstErrMs = 0, errsInBurst = 0, burstLock = 0;
+    uint32_t winInBurst = 0;   // Pre 4: Fehler des laufenden Schub-Verdachts, die schon als Fenster-Fehler zaehlen
     bool inWin = false, probe = false;
     g_stats.guardNextInS = -1;
     for (;;) {
@@ -132,17 +134,22 @@ void task(void*)
 
         // Fehlerschub erkennen: HW_GUARD_BURST_ERRORS Fehler innerhalb HW_GUARD_BURST_MS
         if (e != lastErr) {
-            if (inWin && !probe) g_stats.guardErrors += e - lastErr;
-            if (!firstErrMs || now - firstErrMs > HW_GUARD_BURST_MS) { firstErrMs = now; errsInBurst = 0; }
-            errsInBurst += e - lastErr;
-            const uint32_t lastErrPrev = lastErr;
+            const uint32_t d = e - lastErr;
+            if (inWin && !probe) g_stats.guardErrors += d;
+            if (!firstErrMs || now - firstErrMs > HW_GUARD_BURST_MS) { firstErrMs = now; errsInBurst = 0; winInBurst = 0; }
+            errsInBurst += d;
+            // Pre 4: Fehler im Fenster (geschuetzt oder Stichprobe) gehoeren zur Welle
+            if (inWin) { g_stats.waveErrors += d; winInBurst += d; }
             lastErr = e;
             if (errsInBurst >= HW_GUARD_BURST_ERRORS && (!burstLock || now - burstLock > 30000UL)) {
                 burstLock = now;
                 g_stats.burstErrors += errsInBurst;
+                g_stats.waveErrors += errsInBurst - winInBurst;       // ohne die schon gezaehlten Fenster-Fehler
+                winInBurst = errsInBurst;
                 on_burst(firstErrMs);
             } else if (burstLock && now - burstLock <= HW_GUARD_BURST_MS) {
-                g_stats.burstErrors += e - lastErrPrev;              // Nachzuegler desselben Schubs
+                g_stats.burstErrors += d;                            // Nachzuegler desselben Schubs
+                if (!inWin) { g_stats.waveErrors += d; winInBurst += d; }
             }
         }
 
@@ -281,7 +288,15 @@ static void mine_loop(ScanFn scan, bool isHw, uint32_t nonceStart, uint32_t nonc
 
         uint32_t cands[8];
         int nc = 0;
+#if HW_IRQ_LOCK
+        // Pre 1: HW-Charge ohne Unterbrechung (Tick, IPC) auf Core 1; danach sind sie sofort wieder frei
+        uint32_t ps = 0;
+        if (isHw) ps = XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL);
         uint32_t done = scan(job, nonce, count, cands, 8, &nc);
+        if (isHw) XTOS_RESTORE_INTLEVEL(ps);
+#else
+        uint32_t done = scan(job, nonce, count, cands, 8, &nc);
+#endif
         *hashCounter += done;
 
         // Scanner zaehlen im T[3]-Wort (Big-Endian) -> echte Nonce = bswap32

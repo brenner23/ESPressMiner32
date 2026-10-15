@@ -9,7 +9,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.0.009"   // Master 004, Schritt 009: Schleife O (240 Takte, ~1023 kH/s), Rueckfall J
+#define MINER_VERSION     "1.3.0.011-pre4"   // Master 005, Pre 4: Pre 3 + Wellen-Fehler getrennt angezeigt (waveErrors)
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
@@ -48,6 +48,13 @@
 // kostete ~0,2 % (1 ms je 500 ms). Zurueck: 500.
 #ifndef HW_YIELD_MS
 #define HW_YIELD_MS              0
+#endif
+
+// Master 005 Pre 1: Interrupts auf Core 1 waehrend einer HW-Charge (HW_BATCH_SIZE Nonces, ~8 ms)
+// sperren. Ziel: Tick-/IPC-Unterbrechungen kosten ~0,5 % (rechnerisch 1000,4, gemessen ~995).
+// Danach kurz frei, damit wartende Interrupts laufen. 0 = aus (wie 1.3.0.009).
+#ifndef HW_IRQ_LOCK
+#define HW_IRQ_LOCK              1
 #endif
 
 // Sicherheitsabstand (CPU-Takte) auf die beim Start gemessenen Grenzwerte

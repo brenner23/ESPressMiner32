@@ -19,6 +19,7 @@ Effektive Hashrate = Hashrate x (1 - Fehlerquote).
 | 1.3.0.005 | Laufzeit-Kontrolle mit 2 Fenstern (25 %/256, 1 %/4096) | 240 | 989 | – | geflasht 14.10. 09:17, Langzeitlauf |
 | 1.3.0.008 | WLAN-Waechter + Schutzfenster | 240 | 989 | Welle 0 statt 6–7 | ~1019–1020 gesamt |
 | 1.3.0.009 | Schleife O (p2 39) | 239,9 | ~995 | 0 | **~1024 gesamt** |
+| 1.3.0.009 | Langzeitlauf 29 h | 239,9 | ~995 | 0,016 % (fast nur Stichprobe) | 1024 Anzeige, ~1050 am Pool |
 | 1.3.0.010 | Anzeige + schneller SW-Scan (Versuch) | 239,9 | ~995 + SW 34 | ~10–12 % | verworfen |
 
 ## 1.3.0.001 – Messbetrieb (Firmware zeigt noch "1.3.0-dev")
@@ -226,6 +227,23 @@ CONTINUE->LOAD bzw. START->LOAD und bringen keinen eigenen Takt):
 nach dem Versuch 1.3.0.010 erneut 15:56: 0 Fehler bei 816 Kandidaten in der ersten Minute, ~1024 kH/s.
 Backup `ESPressMiner32_v1.3.0.009_O_1024khs.zip` + `firmware_v1.3.0.009.bin`.
 
+### Langzeitlauf 1.3.0.009 (14.10. 16:00 – 15.10. ~21:30, ausgewertet 15.10.)
+
+Quellen: Logger .49 `/opt/test-logger/v005/USB-C_v1.3.0.005.csv` (Name veraltet, ab 14.10. 15:10 laeuft
+dort 1.3.0.009; alle 2 min bis 15.10. 11:16), /api/stats am Abend, Pool shares.json.
+
+- Stand nach 29,4 h (API): Ø **1024,0 kH/s**, 259 von 1.654.448 Kandidaten verworfen = **0,016 %**,
+  Shares 2598/5 (0,2 % abgelehnt = normale veraltete Shares), 0 WLAN-Abbrueche, 69 C, guardErrors 0 in 147 Fenstern.
+- Logger 19,3 h ab Neustart 16:00: 152 Fehler, davon **131 in 17 Schueben zu je ~8 Fehlern, ziemlich genau
+  jede volle Betriebsstunde** (bei 03:00 und 08:00 kein Schub), dazu 21 Einzelfehler (~1 pro Stunde, ~0,002 %).
+- Ursache Stundentakt: **kein Rechenfehler und keine neue Stoerung**, sondern die gewollte Stichprobe des
+  Schutzfensters: `HW_GUARD_PROBE_EVERY 6` -> jedes 6. Fenster bleibt ungeschuetzt, 6 x 600,47 s = 3602,8 s.
+  Die WLAN-Welle trifft dann die schnelle Schleife O voll (~8 Fehler). Die uebrigen 5 Fenster pro Stunde: 0 Fehler.
+- Einzelfehler ~0,002 % = echte zufaellige Rechenfehler, unter dem alten Wert von v1.1.0 (0,006 %).
+- Pool (27 volle Stunden ab 14.10. 17 Uhr): ~88 Shares/h = **~1050 +- 21 kH/s** -> Anzeige 1024 ist echt.
+- Kosten der Stichprobe: ~8 verworfene Kandidaten pro Stunde = rechnerisch ~0,15 kH/s. Entscheidung brenner23:
+  **so lassen** (Stichprobe bleibt jedes 6. Fenster).
+
 ## 1.3.0.010 – Versuch, verworfen (nicht auf GitHub)
 
 Zwei Aenderungen auf einmal (gegen die eigene Regel): (1) Dashboard: 1-s-Wert ohne Komma, Mittel 10 min;
@@ -237,6 +255,51 @@ weiter ~10 %, 1.3.0.009 direkt danach 0 Fehler bei gleicher Temperatur (67 C).
 -> Ursache liegt nicht (nur) im SW-Scan. Verdacht: geaenderte IRAM-Lage der HW-Schleife oder der 1-s-Takt der
 Statistik auf Core 0. Naechster Versuch getrennt: erst nur die Anzeige, dann der SW-Scan.
 Stand gesichert: `backups/ESPressMiner32_v1.3.0.010-versuch_Fehler.zip`.
+
+## Master 005 (ab 15.10.2026) – Pre-Versionen, zwei USB-C-Boards (A = Hauptboard, B = Board im Acrylgehaeuse)
+
+Messmethode Master 005: /api/stats alle 30 s (scratch measure.py), kH/s aus Zuwachs hwHashes/swHashes
+geteilt durch Laufzeit (unabhaengig von der Anzeige). Bewertung: Fehlerrate steigt stetig/schnell = gescheitert,
+Schuebe von ~8 (WLAN-Welle, Schutzfenster lernt noch) zaehlen nicht.
+
+| Schritt | Aenderung | HW | SW | gesamt (Zaehler) | Anzeige Ø | Fehler | Ergebnis |
+|---|---|---|---|---|---|---|---|
+| Basis | 1.3.0.009 unveraendert, 10 min | 989,1 | 30,3 | **1019,4** | 1024,2 | 10/10.241 (8 davon 1. WLAN-Welle 22:11, ungeschuetzt) = 2 echte | Referenz |
+
+| ⭐ **Pre 1** | 1.3.0.011-pre1: Interrupts auf Core 1 je HW-Charge gesperrt (Board A) | **995,4** | 30,2 | **1025,6** | **1026,1** | 8/9.959 = nur 1. WLAN-Welle, **0 Einzelfehler** | **OK, +~2 kH/s** |
+
+| Pre 2 | Pre 1 + schneller SW-Scan aus 1.3.0.010 (OHNE Anzeige-Aenderung) | ~997 | **34,5** | ~1031 | 1030–1033 | **244/2.507 = ~10 %, stetig steigend** | **verworfen**, sofort Pre 1 zurueck |
+
+| Pre 2b | Gegenprobe: Pre-2-Code, aber SW_FAST_SCAN 0 (Lage verschoben, schneller Pfad aus) | – | ~30 | ~1025 | 1023–1026 | **173/1.627 = ~10 %** nach 90 s | verworfen -> **Beweis: Code-Lage ist schuld** |
+| ⭐⭐ **Pre 3** | Pre 1 + schneller SW-Scan + **HW-Schleifen festgenagelt** (HW_LOOP_PIN: Block auf Versatz 0xc74 in 4 KB wie Pre 1) | **999,8** | **34,9** | **1034,7** | **1034,0** | 8/11.315 = nur 1. WLAN-Welle (23:01:20–50), **0 Einzelfehler** | **OK, +9 kH/s gegen Pre 1** |
+
+Pre 2b (15.10. ~22:48): Fehler ~10 % von der ersten Sekunde an, gleich wie Pre 2 -> die verschobene Lage der
+HW-Schleifen (Code-Lage im IRAM) verursacht die Fehler, NICHT der schnelle SW-Scan. Betrifft genauso 1.3.0.010.
+Pre 3 (15.10. 22:51–23:03): Adressen gegen Pre 1 geprueft (alle 20 Schleifen gleicher Versatz in 4 KB, O: 0x4008d510 ->
+0x40093510). 1033–1036, Selftest schnell==Referenz OK, Shares 16/0, 64–70 C. Die eine Welle (8 auf einmal, als
+Schub erkannt) kam ungeschuetzt, weil das Schutzfenster nach dem Neustart erst lernt. HW stieg dabei auch (995,4 ->
+999,8, Ursache offen). Backup `ESPressMiner32_v1.3.0.011-pre3_1035khs.zip` + `firmware_v1.3.0.011-pre3.bin`.
+
+**Regel fuer alle Varianten (auch Micro-USB / Display-Version):** Die HW-Schleifen reagieren auf ihre Lage im IRAM.
+Jede Aenderung, die IRAM-Code VOR den Schleifen hinzufuegt oder entfernt (IRAM_ATTR-Funktionen, neue Dateien),
+kann sie verschieben -> immer HW_LOOP_PIN benutzen und nach dem Bauen mit `xtensa-esp32-elf-nm -n firmware.elf`
+pruefen, dass `hw_*`-Adressen modulo 0x1000 gleich der bekannt guten Version sind. Welcher Versatz gut ist,
+muss je Board/Variante einmal gemessen werden (USB-C: 0xc74 fuer hw_v2_fast).
+
+Pre 2 (15.10. ~22:45): Selbsttest schnell == Referenz bestanden, SW 34,5 (schneller Pfad aktiv), Schleife blieb O,
+kein Neustart, 63–67 C. Fehler von Anfang an gleichmaessig (~10/min-Takt: 35 nach 25 s, 244 nach 140 s).
+Pre 1 zurueck (nur App bei 0x10000): sofort wieder 0 Fehler, 1027–1028.
+Schluss mit 1.3.0.010: dort ~10 % auch mit SW_FAST_SCAN 0 (Anzeige-Aenderung drin), hier ~10 % ohne Anzeige-Aenderung.
+Gemeinsam ist nur die neue sha256_sw.cpp -> **Verdacht Code-Lage**: der zusaetzliche IRAM-Code verschiebt die
+HW-Schleifen (hw_v2_fast 0x4008ac74 -> 0x4008efe4). Gegenprobe offen: Pre 2 mit SW_FAST_SCAN 0 (Lage verschoben,
+schneller Pfad aus). Backup `backups/ESPressMiner32_v1.3.0.011-pre2-versuch_Fehler.zip`. Quellcode wieder auf Pre 1.
+
+Basis 15.10. 22:06–22:17: 67,8 -> 73,3 C (steigt; Board steckt im Acrylgehaeuse mit kleinem Lueftungsschlitz),
+Shares 12/0, 1 API-Timeout genau zur Welle.
+Achtung: Basis (Board B) und Pre 1 (Board A) sind verschiedene Boards. Fairer Vergleich auf Board A selbst:
+1.3.0.009 lief dort 30 h mit Anzeige Ø 1024,0 (Logger: totalHashes/uptime 1024,0) -> Pre 1 **+1,6 bis +2,1 kH/s**.
+Pre 1 15.10. 22:21–22:31: 62–66 C, Shares 7/0, wifiDrops 0, Schleife O blieb. Backup
+`backups/ESPressMiner32_v1.3.0.011-pre1_1026khs.zip` + `firmware_v1.3.0.011-pre1.bin`.
 
 ## Ideen fuer spaeter (nach dem Ausreizen)
 

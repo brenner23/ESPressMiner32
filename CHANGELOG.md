@@ -2,6 +2,20 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.0.011 – Master 005 (2026-10-15) – Vorabversion (pre4), ~1035 kH/s
+Schritte pre1–pre4 im Detail mit Messwerten: MESSPROTOKOLL.md (Abschnitt Master 005).
+- **pre1:** Interrupts auf Core 1 waehrend jeder HW-Charge (8192 Nonces, ~8 ms) gesperrt (`HW_IRQ_LOCK`). +~2 kH/s.
+- **pre3:** Schneller Software-Scan auf Core 0 (Runden 0..2 vorberechnet, feste W-Woerter eingerechnet, Hash 2 nach
+  Runde 60 beendet; beim Start gegen den Referenzpfad geprueft): SW 30 -> **35 kH/s**.
+- **pre3: HW-Schleifen festgenagelt** (`HW_LOOP_PIN` in hw_scan_v2.S). Erkenntnis: Die HW-Schleifen reagieren auf ihre
+  Lage im IRAM. Zusaetzlicher Code davor verschob sie und verursachte ~10 % HW-Fehler (so scheiterte auch 1.3.0.010) –
+  bewiesen mit einer Gegenprobe (schneller Pfad aus, Fehler blieben). Jetzt liegt der Block immer auf demselben
+  Versatz wie in der gemessenen Version.
+- **pre4:** Fehler aus WLAN-Wellen werden getrennt gezaehlt und angezeigt (Messhilfe, noch in Arbeit):
+  Dashboard „2 discarded (+8 from 1 Wi-Fi wave)“, /api/stats `waveErrors`, `loopErrors`; `hwErrors` bleibt die Gesamtzahl.
+- Gemessen (Hauptboard, 10 min): **1034,7 kH/s** (HW 999,8 + SW 34,9), 0 Fehler der Schleife, 1 WLAN-Welle (8)
+  vor dem Lernen des Takts. Pool-Gegenprobe 24 h mit 1.3.0.009: 1062 ±23 kH/s angekommen bei 1024 Anzeige.
+
 ## v1.3.0.009 – Master 004 (2026-10-14) – Schleife O, ~1024 kH/s
 - Hash-Schleife **O** (J mit einem Takt weniger vor dem LOAD von Block 2, 240 Takte) als Hauptschleife,
   Rueckfall O -> J -> A -> +2 -> breit. **~1024 kH/s** (HW ~995 + SW ~30).

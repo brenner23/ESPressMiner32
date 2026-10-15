@@ -221,6 +221,20 @@
     // Gemessene Grenzen (ruhig / mit Busverkehr auf Core 0):
     //   p1 3/4, p2 39/40, pl1 9/10, p3 26/27, pl2 9/10, d2 12, d3 8.
     // 247 Takte pro Nonce.
+#ifndef HW_LOOP_PIN
+#define HW_LOOP_PIN         1        // 0 = Lage wie bisher (Linker entscheidet)
+#endif
+#define HW_LOOP_PIN_ALIGN   4096
+#define HW_LOOP_PIN_OFFSET  0xc74
+#if HW_LOOP_PIN
+    // Master 005 Pre 3: Lage aller HW-Schleifen festnageln. Die Schleifen reagieren auf ihre Lage im IRAM
+    // (Pre 2/2b: +17 KB SW-Code davor -> alles um 0x4370 verschoben -> ~10 % Fehler, auch mit SW_FAST_SCAN 0).
+    // Der Block beginnt deshalb immer auf demselben Versatz innerhalb von HW_LOOP_PIN_ALIGN wie in Pre 1
+    // (hw_v2_fast = 0x4008ac74 -> Versatz 0xc74 in 4 KB). Die uebrigen Schleifen folgen in fester Reihenfolge.
+    .section .iram1.hwv2f, "ax"
+    .balign HW_LOOP_PIN_ALIGN
+    .skip   HW_LOOP_PIN_OFFSET
+#endif
     PL_MINE hw_v2_fast,   .iram1.hwv2f,  4, 16, 40, 10, 14, 27, 10, 2, 1
     // +2 bzw. +14 Takte auf jede Wartezeit (257 / 317 Takte): Rueckfall, wenn der
     // Selbsttest scheitert oder die Software Kandidaten nicht bestaetigt.

@@ -17,3 +17,10 @@ void sha256d(const uint8_t* data, size_t len, uint8_t out[32]);
 uint32_t sw_scan(const uint32_t midstate[8], const uint32_t blk2[3],
                  uint32_t nonce, uint32_t count,
                  uint32_t* cands, int maxCands, int* nCands);
+
+// Referenzpfad (zwei volle Transformationen) und Pruefung des schnellen Pfads (ab 1.3.0.010)
+uint32_t sw_scan_ref(const uint32_t midstate[8], const uint32_t blk2[3],
+                     uint32_t nonce, uint32_t count,
+                     uint32_t* cands, int maxCands, int* nCands);
+int  sw_selfcheck(int n);      // Abweichungen schnell vs. Referenz; > 0 schaltet den schnellen Pfad ab
+bool sw_fast_active();

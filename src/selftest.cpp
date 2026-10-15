@@ -189,6 +189,14 @@ bool selftest_run()
     sw_scan(mid, b2, genesisNonce - 2, 4, cands, 8, &nc);
     ok &= check("Software scan finds genesis nonce", nc == 1 && cands[0] == genesisNonce);
 
+    // Schneller Software-Pfad (ab 1.3.0.010) gegen den Referenzpfad
+    {
+        int bad = sw_selfcheck(2000);
+        char lbl[64];
+        snprintf(lbl, sizeof(lbl), "Fast software scan == reference (2000, %d errors)", bad);
+        check(lbl, bad == 0);   // bei Fehlern laeuft der alte Pfad weiter, kein Abbruch
+    }
+
     nc = 0;
     hw_scan(b1, b2, genesisNonce - 2, 4, HW_CAND_MASK, cands, 8, &nc);
     ok &= check("Hardware scan finds genesis nonce", nc == 1 && cands[0] == genesisNonce);

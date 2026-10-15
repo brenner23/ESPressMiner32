@@ -6,8 +6,9 @@ Ein Bitcoin-Stratum-Miner (V1) für den **klassischen ESP32**. Er nutzt den **SH
 per direktem Registerzugriff mit einer Pipeline: Die Daten für den nächsten Block werden geschrieben,
 während die Engine noch rechnet.
 
-Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~990 kH/s** (Hardware ~960 kH/s mit 247 Takten pro Double-SHA256
-+ Software-Miner auf dem zweiten Kern ~30 kH/s), Version 1.2.1.
+Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~1035 kH/s** (Hardware ~1000 kH/s mit 240 Takten pro Double-SHA256
++ Software-Miner auf dem zweiten Kern ~35 kH/s), Vorabversion 1.3.0.011-pre4.
+**Beim Pool nachgemessen** statt nur angezeigt: 24 h mit 1.3.0.009 → 1062 ±23 kH/s angekommen bei 1024 kH/s Anzeige.
 
 🔗 **Projektseite:** https://github.com/brenner23/ESPressMiner32
 
@@ -18,7 +19,9 @@ Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~990 kH/s** (Hardware ~960 kH/s mit 247 
 
 | Version | kH/s | Takte/Hash | Was ist neu |
 |---|---|---|---|
-| **1.2.1** (aktuell) | **~990** | 247 + SW | Software-Miner auf Core 0 wieder an: kostet die Hardware nur noch ~3 kH/s |
+| **1.3.0.011-pre4** (Vorabversion) | **~1035** | 240 + SW | Interrupts auf Core 1 je Charge gesperrt, schneller Software-Scan (35 kH/s), Hash-Schleifen an fester Stelle im Speicher, Fehler aus WLAN-Wellen getrennt angezeigt |
+| 1.3.0.009 | ~1024 | 240 + SW | Schleife „O“ (240 Takte), WLAN-Wächter, Schutzfenster gegen periodische WLAN-Störungen, Überhitzungsschutz, Oberfläche auf Englisch |
+| 1.2.1 | ~990 | 247 + SW | Software-Miner auf Core 0 wieder an: kostet die Hardware nur noch ~3 kH/s |
 | 1.2.0 | ~963 | 247 | Neue Hash-Schleife „v2“ aus [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), Known-Answer-Test beim Start, automatische Rückfallstufen |
 | 1.1.0 | ~960 | 249 | Taktgenaue Warteschleifen, Kalibrierung prüft die echte Mining-Schleife (behebt einen Fehler aus 1.0.0), robustere Kalibrierung |
 | 1.0.0 | ~902 | 265 | Erste Version |
@@ -31,7 +34,7 @@ Es gibt bewusst keine fertigen Firmware-Dateien: Geflasht wird, was man im Quell
 
 ## Funktionen
 
-- **~990 kH/s** auf einem klassischen ESP32 (Hardware-SHA-Pipeline auf Core 1 + Software-Miner auf Core 0)
+- **~1035 kH/s** auf einem klassischen ESP32 (Hardware-SHA-Pipeline auf Core 1 + Software-Miner auf Core 0)
 - **Selbsttest** beim Start (Genesis-Block, 2000 Zufalls-Header, 5000 Nonces). Schlägt er fehl, wird nicht gemint.
 - **Jeder Treffer wird in Software nachgerechnet**, bevor ein Share zum Pool geht
 - **Web-Dashboard** unter `http://espressminer.local/` mit Hashrate-Verlauf, JSON unter `/api/stats`
@@ -127,7 +130,18 @@ python tools/espressminer_setup.py --reset         # Einstellungen löschen -> P
 | Software-Pipeline: nächsten Block 1 vor der Kandidatenprüfung starten | ~902 (v1.0.0) |
 | Taktgenaue Zählschleife (`loopnez`) statt Abfrage der Taktuhr, LOAD-Zeiten getrennt | ~960 (v1.1.0) |
 | Hash-Schleife „v2“ aus NerdMiner Modded: Wartezeiten gezählt, alles außer T[0..7] in Rechenzeit der Engine | ~963 (v1.2.0) |
-| Software-Miner auf Core 0 dazu (SHA-Writes ≥ 3 Takte auseinander, siehe unten) | **~990** (v1.2.1) |
+| Software-Miner auf Core 0 dazu (SHA-Writes ≥ 3 Takte auseinander, siehe unten) | ~990 (v1.2.1) |
+| Header-Wörter in Registern, Wartezeiten einzeln an die Grenze gemessen (Schleife „O“, 240 Takte) | ~1024 (v1.3.0.009) |
+| Interrupts auf Core 1 während jeder Charge gesperrt | ~1026 (pre1) |
+| Schneller Software-Scan (vorberechnete Runden, früher Abbruch), Hash-Schleifen an fester Stelle | **~1035** (pre3/pre4) |
+
+### Ab 1.3.0.011: Hash-Schleifen an fester Stelle im Speicher
+
+Die Hash-Schleifen laufen so knapp am Limit der SHA-Engine, dass sogar ihre **Lage im IRAM** zählt: Als der schnelle
+Software-Scan (17 KB Code) dazukam, rutschten sie im Speicher nach hinten, und es gab ~10 % Rechenfehler – auch mit
+abgeschaltetem schnellen Pfad (Gegenprobe). `HW_LOOP_PIN` in `src/hw_scan_v2.S` legt den Block der Schleifen deshalb
+immer auf denselben Versatz innerhalb von 4 KB wie in der gemessenen Version. Wer Code hinzufügt, kann mit
+`xtensa-esp32-elf-nm -n .pio/build/esp32dev/firmware.elf | grep hw_` prüfen, ob die Adressen (modulo 0x1000) gleich bleiben.
 
 ### Ab 1.2.0: Hash-Schleife „v2“ (Quelle: NerdMiner Modded)
 
@@ -162,7 +176,39 @@ Messwerkzeuge: `pio run -e hw_probe -t upload` (Registerzugriffe, Engine-Zeiten)
 
 ## Rechenfehler, ehrlich gesagt
 
-**Ab 1.2.0 (v2-Schleife):** Brenntest mit Pool-Verbindung und WLAN: 26,7 Minuten, Ø **989,6 kH/s**, 1,59 Mrd. Hashes:
+### WLAN-Wellen und Schutzfenster (ab 1.3.0.008)
+
+In Langzeittests kamen die restlichen Rechenfehler fast nur als **Schub von 5–8 Fehlern, pünktlich alle ~600 s**.
+Die Ursache liegt nicht im Miner, sondern in der **WLAN-Verbindung**: Der Takt hängt an der Anmeldung des ESP am WLAN
+und springt bei einer Neuanmeldung mit. Sehr wahrscheinlich ist es eine periodische Aktion des Access Points, z. B. der
+Schlüsselwechsel oder die Mesh-Funktion einer **Fritzbox**. IP-Verkehr (Ping-Flut, UDP-Flut) stört dagegen nicht.
+Je nach Router kann der Takt anders sein oder ganz fehlen.
+
+Das **Schutzfenster** lernt diesen Takt aus den Schüben selbst (1–30 min) und rechnet 6 s vor bis 6 s nach dem erwarteten
+Zeitpunkt mit einer etwas vorsichtigeren Schleife (Kosten ~1 kH/s). Jedes 6. Fenster bleibt als Stichprobe ungeschützt,
+damit der Miner merkt, ob die Welle noch da ist. Nach einem Neustart trifft die erste Welle ungeschützt, weil der Takt
+erst gelernt wird.
+
+**Anzeige (ab pre4, Messhilfe – noch in Arbeit):** Das Dashboard zeigt die Fehler getrennt, z. B.
+`2 discarded (+8 from 1 Wi-Fi wave)`. Die erste Zahl sind Fehler der Hash-Schleife selbst, in Klammern die Fehler aus
+WLAN-Wellen und die Anzahl der Wellen. Nichts wird gelöscht: `/api/stats` liefert weiter `hwErrors` (gesamt) sowie
+`waveErrors` und `loopErrors`. Die Zählung ist für Messungen gedacht und wird noch verfeinert; im Zweifel gilt `hwErrors`.
+
+### Display gegen Pool
+
+Ein Miner kann auf dem Display viel anzeigen. Was zählt, ist, was beim Pool ankommt (angenommene Shares × Difficulty × 2³² / Zeit).
+Gegenprobe auf einem eigenen Stratum-Pool, 24 volle Stunden, Pool-Difficulty 0,01 (±2 %):
+
+| Miner | Anzeige | beim Pool angekommen |
+|---|---|---|
+| ESPressMiner32 1.3.0.009 | 1024 | **1062 ±23** |
+| 5 andere ESP32-Miner (geschlossene Firmware), Schnitt | ~1027 | ~1000 |
+
+![Dashboard 1.3.0.011-pre4 nach 3 Minuten: 1032,8 kH/s, 0 Fehler der Schleife, +8 aus der ersten WLAN-Welle (Pool, Worker und WLAN geschwärzt)](docs/dashboard_v1.3.0.011-pre4.png)
+
+### Ab 1.2.0 (v2-Schleife)
+
+Brenntest mit Pool-Verbindung und WLAN: 26,7 Minuten, Ø **989,6 kH/s**, 1,59 Mrd. Hashes:
 **0 Rechenfehler**, **42 von 42 Shares akzeptiert** (erwartet ~36 bei Pool-Diff 0,01). Als Echtheits-Check zählt
 `/api/stats` alle 16-Bit-Treffer (`candidates`): Es müssen ~Hashes/65.536 sein, gemessen 99,6 % davon
 (23.982 von ~24.070, innerhalb der statistischen Schwankung). Die Hashrate ist also wirklich gerechnet, nicht nur gezählt.

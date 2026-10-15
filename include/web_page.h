@@ -206,7 +206,8 @@ async function tick(){try{const s=await(await fetch('/api/stats')).json();
  $('hr').textContent=s.hashrate.toFixed(1);$('avg').textContent=s.average.toFixed(1);
  const tot=s.accepted+s.rejected;$('sh').textContent=s.rejected+'/'+s.accepted+'/'+(tot?s.accepted*100/tot:100).toFixed(1)+'%';
  $('shsub').textContent=s.submitted+' sent / '+s.accepted+' accepted · '+s.rejected+' rejected';
- $('shsub2').textContent=(s.hwErrors||0)+' discarded (calculation errors)';
+ {const we=s.waveErrors||0, le=(s.hwErrors||0)-we;
+  $('shsub2').textContent=le+' discarded (calculation errors)'+(we?' (+'+we+' from '+(s.guardBursts||0)+' Wi-Fi wave'+((s.guardBursts||0)==1?'':'s')+')':'');}
  $('best').textContent=fd(s.bestDiff);$('up').textContent=fu(s.uptime);$('tot').textContent=fh(s.totalHashes);
  $('pool').textContent=s.pool+(s.authorized?'':s.connected?' (connecting...)':' (disconnected)');
  $('pd').className='dot'+(s.authorized?' on':'');$('pname').textContent=s.poolName+(s.poolAltMin?' ⇆ every '+s.poolAltMin+' min':'');$('user').textContent=s.user;
