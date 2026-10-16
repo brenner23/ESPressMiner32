@@ -30,9 +30,12 @@ Display version (env nmtv154 / cyd), fetched at build time:
   - Adafruit GFX Library      BSD         https://github.com/adafruit/Adafruit-GFX-Library
   - Adafruit ST7735/ST7789    MIT         https://github.com/adafruit/Adafruit-ST7735-Library
   - Adafruit BusIO            MIT         https://github.com/adafruit/Adafruit_BusIO
-  Fonts are NOT included: include/fonts/*.h are generated locally with
-  tools/ttf2gfx.py (needs freetype-py, BSD/FreeType licence) from a TTF of
-  your choice, e.g. Liberation Sans Narrow Bold (GPLv2 with font exception).
+
+Included font (since v1.3.1-d6):
+  - Archivo Narrow            SIL OFL 1.1 https://github.com/Omnibus-Type/ArchivoNarrow
+    Copyright 2019 The Archivo Narrow Project Authors. TTF + licence text in
+    tools/fonts/ (OFL-ArchivoNarrow.txt). include/fonts/ArchivoNB*pt7b.h are
+    bitmap conversions made with tools/ttf2gfx.py (freetype-py), same licence.
   Layout and font sizes follow the author's own Duino-Coin display projects.
 
 Setup tools (tools/*.py) need:

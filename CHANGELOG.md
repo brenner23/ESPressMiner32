@@ -2,6 +2,13 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1-d6 – Display-Version, Branch `display` (2026-10-16) – Teststand
+- Schrift **Archivo Narrow Bold** (SIL OFL 1.1) statt Liberation Sans Narrow: darf mitgeliefert werden ->
+  `include/fonts/ArchivoNB*pt7b.h` liegen bei, einfach bauen und flashen. TTF + Lizenz in `tools/fonts/`.
+  Gleiche Breite wie vorher, Ziffern ~7 % hoeher; Layout unveraendert.
+- `tools/ttf2gfx.py`: neue Option `--wght` fuer variable Schriften.
+- HW-Schleifen unveraendert (`hw_*` gleich v1.3.1), 1034–1035 kH/s auf CYD und NM-TV.
+
 ## v1.3.1-d5 – Display-Version, Branch `display` (2026-10-16) – Teststand
 - **Netz-Difficulty** auf dem Display: CYD quer als 3. Blase (Hashrate | Best Diff | Network Diff), hochkant eigene
   Zeile, NM-TV klein „NET 75“ in der Labelzeile der Best-Diff-Blase.

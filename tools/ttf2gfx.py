@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """TTF -> Adafruit-GFX-Font (.h), wie Adafruits fontconvert (141 dpi, 1 bit, Zeichen 0x20..0x7E).
-Aufruf: python ttf2gfx.py <schrift.ttf> <name> <pt> [pt ...] <ausgabeordner>
+Aufruf: python ttf2gfx.py [--wght 700] <schrift.ttf> <name> <pt> [pt ...] <ausgabeordner>
+  --wght: Gewicht bei variablen Schriften (z. B. ArchivoNarrow[wght].ttf, 700 = Bold)
 Benoetigt: pip install freetype-py"""
 import os, sys, freetype
 
-def convert(path, name, pt, outdir, first=0x20, last=0x7E):
+def convert(path, name, pt, outdir, first=0x20, last=0x7E, wght=None):
     face = freetype.Face(path)
+    if wght: face.set_var_design_coords((wght,))
     face.set_char_size(pt << 6, 0, 141, 0)
     bits, glyphs = bytearray(), []
     for c in range(first, last + 1):
@@ -38,5 +40,8 @@ def convert(path, name, pt, outdir, first=0x20, last=0x7E):
     print(f"{p}: {len(bits)} Bytes Bitmap, yAdvance {ya}")
 
 if __name__ == "__main__":
-    ttf, name, *pts, outdir = sys.argv[1:]
-    for pt in pts: convert(ttf, name, int(pt), outdir)
+    args = sys.argv[1:]
+    wght = None
+    if args[:1] == ["--wght"]: wght = int(args[1]); args = args[2:]
+    ttf, name, *pts, outdir = args
+    for pt in pts: convert(ttf, name, int(pt), outdir, wght=wght)

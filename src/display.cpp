@@ -23,18 +23,18 @@ DisplayStats g_disp = {};
 #include "utils.h"
 #include <Preferences.h>
 #include <driver/ledc.h>
-#if !__has_include("fonts/LibNarrowB10pt7b.h")
-#error "Display fonts missing: see include/fonts/README.md (python tools/ttf2gfx.py ...)"
+#if !__has_include("fonts/ArchivoNB10pt7b.h")
+#error "Display fonts missing: see include/fonts/README.md"
 #endif
-#include "fonts/LibNarrowB10pt7b.h"
-#include "fonts/LibNarrowB12pt7b.h"
-#include "fonts/LibNarrowB13pt7b.h"
-#include "fonts/LibNarrowB14pt7b.h"
-#include "fonts/LibNarrowB15pt7b.h"
-#include "fonts/LibNarrowB16pt7b.h"
-#include "fonts/LibNarrowB17pt7b.h"
-#include "fonts/LibNarrowB18pt7b.h"
-#include "fonts/LibNarrowB20pt7b.h"
+#include "fonts/ArchivoNB10pt7b.h"
+#include "fonts/ArchivoNB12pt7b.h"
+#include "fonts/ArchivoNB13pt7b.h"
+#include "fonts/ArchivoNB14pt7b.h"
+#include "fonts/ArchivoNB15pt7b.h"
+#include "fonts/ArchivoNB16pt7b.h"
+#include "fonts/ArchivoNB17pt7b.h"
+#include "fonts/ArchivoNB18pt7b.h"
+#include "fonts/ArchivoNB20pt7b.h"
 
 #if defined(BOARD_CYD)
 static SPIClass s_spi(HSPI);                       // Vorlage CYD: eigener HSPI-Bus (main.cpp Z. 90)
@@ -283,7 +283,7 @@ void display_progress(int percent, const char* line)
 }
 
 // ---- Dashboard ------------------------------------------------------------------------------
-// 1.3.1-d2f: Liberation Sans Narrow Bold im GFX-Format, Groessen und Geometrie aus der Duino-Vorlage des Users
+// Schriften: ab 1.3.1-d6 Archivo Narrow Bold (OFL, include/fonts), vorher Liberation Narrow. Groessen und Geometrie aus der Duino-Vorlage des Users
 // (duinocoin-NM-TV-154-Miner/include/NMDisplay.h): Blasen 112x51, Werte 20 pt, kleine Felder 15 pt (ab 5 Zeichen 12 pt),
 // Shares nach Laenge 20/18/17/16/15 pt, Kopf 15 pt, Labels eingebaute Schrift.
 // GFX-Schriften zeichnen keinen Hintergrund -> je Feld erst Rechteck in Blasenfarbe, dann Text (nur bei Aenderung).
@@ -407,7 +407,7 @@ static void draw_frame()
     const int16_t y0 = L_Y0, d = L_DY;
     tft.fillScreen(C_BG);
     tft.fillRect(0, y0, L_W, 27, C_PANEL2);          // Kopfband wie Vorlage
-    tft.setFont(&LibNarrowB14pt7b);              // 15 pt zu breit (Foto 16.10.: "2" im Statuspunkt)
+    tft.setFont(&ArchivoNB14pt7b);              // 15 pt zu breit (Foto 16.10.: "2" im Statuspunkt)
     tft.setTextColor(C_ACCENT);
     tft.setCursor(7, y0 + 23);
     tft.print("ESPRESSMINER32");
@@ -494,10 +494,10 @@ static int update_fields()
 
     // Hashrate ohne Nachkomma, abgeschnitten (nie aufrunden); Web/API behalten die Nachkommastelle
     snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.khCurrent);
-    n += field(F_HASH, b, fit(b, F_HASH.w - 8 - 27, { &LibNarrowB20pt7b, &LibNarrowB18pt7b, &LibNarrowB16pt7b, &LibNarrowB15pt7b }),
+    n += field(F_HASH, b, fit(b, F_HASH.w - 8 - 27, { &ArchivoNB20pt7b, &ArchivoNB18pt7b, &ArchivoNB16pt7b, &ArchivoNB15pt7b }),
                C_GREEN, "kH/s");
     fmt_diff(g_stats.bestDiff, b, sizeof(b));
-    n += field(F_BEST, b, fit(b, F_BEST.w - 8, { &LibNarrowB20pt7b, &LibNarrowB18pt7b, &LibNarrowB16pt7b, &LibNarrowB15pt7b }), C_BLUE);
+    n += field(F_BEST, b, fit(b, F_BEST.w - 8, { &ArchivoNB20pt7b, &ArchivoNB18pt7b, &ArchivoNB16pt7b, &ArchivoNB15pt7b }), C_BLUE);
     {   // Netz-Difficulty: quer/hochkant grosse Zahl, NM-TV klein "NET 75" in der Labelzeile
         char v[16];
         if (g_stats.networkDiff > 0) fmt_diff(g_stats.networkDiff, v, sizeof(v)); else strlcpy(v, "--", sizeof(v));
@@ -505,26 +505,26 @@ static int update_fields()
             snprintf(b, sizeof(b), "NET %s", v);
             n += field(F_NET, b, nullptr, C_MUTED);
         } else {
-            n += field(F_NET, v, fit(v, F_NET.w - 8, { &LibNarrowB20pt7b, &LibNarrowB18pt7b, &LibNarrowB16pt7b, &LibNarrowB15pt7b }), C_TEXT);
+            n += field(F_NET, v, fit(v, F_NET.w - 8, { &ArchivoNB20pt7b, &ArchivoNB18pt7b, &ArchivoNB16pt7b, &ArchivoNB15pt7b }), C_TEXT);
         }
     }
 
     snprintf(b, sizeof(b), "%lu/%lu", (unsigned long)g_stats.rejected, (unsigned long)g_stats.accepted);
     {   // Vorlage nm_share_font_for(): <= 11 Zeichen 20 pt, 12 -> 18, 13 -> 17, 14 -> 16, laenger 15
         const size_t len = strlen(b);
-        const GFXfont* f = len <= 11 ? &LibNarrowB20pt7b : len == 12 ? &LibNarrowB18pt7b :
-                           len == 13 ? &LibNarrowB17pt7b : len == 14 ? &LibNarrowB16pt7b : &LibNarrowB15pt7b;
+        const GFXfont* f = len <= 11 ? &ArchivoNB20pt7b : len == 12 ? &ArchivoNB18pt7b :
+                           len == 13 ? &ArchivoNB17pt7b : len == 14 ? &ArchivoNB16pt7b : &ArchivoNB15pt7b;
         n += field(F_SHARE, b, f, C_TEXT);
     }
 
     snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.blocksFound);
-    n += field(F_BLOCK, b, (strlen(b) >= 5 || gfx_width(b, &LibNarrowB15pt7b) > 54) ? &LibNarrowB12pt7b : &LibNarrowB15pt7b,
+    n += field(F_BLOCK, b, (strlen(b) >= 5 || gfx_width(b, &ArchivoNB15pt7b) > 54) ? &ArchivoNB12pt7b : &ArchivoNB15pt7b,
                C_TEXT);
     if (g_stats.chipTemp > 0) {
         snprintf(b, sizeof(b), "%.0f", g_stats.chipTemp);
-        n += field(F_CHIP, b, &LibNarrowB15pt7b, C_TEXT, nullptr, true);
+        n += field(F_CHIP, b, &ArchivoNB15pt7b, C_TEXT, nullptr, true);
     } else {
-        n += field(F_CHIP, "--", &LibNarrowB15pt7b, C_MUTED);
+        n += field(F_CHIP, "--", &ArchivoNB15pt7b, C_MUTED);
     }
 
     time_t now = time(nullptr);
@@ -533,19 +533,19 @@ static int update_fields()
     if (t.tm_year >= 120) {
         static const char* WD[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
         snprintf(b, sizeof(b), "%02d:%02d", t.tm_hour, t.tm_min);
-        n += field(F_CLOCK, b, &LibNarrowB20pt7b, C_TEXT);
+        n += field(F_CLOCK, b, &ArchivoNB20pt7b, C_TEXT);
         // Datum klein wie beim NerdMiner "FRI 16-10-2026" (User, Foto 16.10.: Uhr ist wichtig, Datum Nebensache), fest 10 pt
         snprintf(b, sizeof(b), "%s %02d-%02d-%04d", WD[t.tm_wday], t.tm_mday, t.tm_mon + 1, t.tm_year + 1900);
-        n += field(F_DATE, b, L_WIDE ? &LibNarrowB13pt7b : &LibNarrowB10pt7b, C_MUTED);   // quer mehr Platz
+        n += field(F_DATE, b, L_WIDE ? &ArchivoNB13pt7b : &ArchivoNB10pt7b, C_MUTED);   // quer mehr Platz
     } else {
-        n += field(F_CLOCK, "--:--", &LibNarrowB20pt7b, C_MUTED);
-        n += field(F_DATE, "time ...", &LibNarrowB10pt7b, C_MUTED);
+        n += field(F_CLOCK, "--:--", &ArchivoNB20pt7b, C_MUTED);
+        n += field(F_DATE, "time ...", &ArchivoNB10pt7b, C_MUTED);
     }
 
     const uint32_t up = g_stats.uptimeS;
     snprintf(b, sizeof(b), "%lud %02lu:%02lu", (unsigned long)(up / 86400),
              (unsigned long)(up / 3600 % 24), (unsigned long)(up / 60 % 60));
-    const GFXfont* small = L_WIDE ? &LibNarrowB12pt7b : &LibNarrowB10pt7b;   // 10 pt wie Datum (User), quer 12 pt
+    const GFXfont* small = L_WIDE ? &ArchivoNB12pt7b : &ArchivoNB10pt7b;   // 10 pt wie Datum (User), quer 12 pt
     n += field(F_UP, b, small, C_MUTED);
     pool_name(b, sizeof(b), small, F_POOL.w - 6);
     n += field(F_POOL, b, small, C_ACCENT);

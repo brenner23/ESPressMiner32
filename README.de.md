@@ -71,7 +71,7 @@ Dashboard auf zwei günstigen Boards:
 - Weboberfläche → Einstellungen → **Display** (ganz unten): 3 Farbdesigns, Helligkeit mit Live-Vorschau;
   NM-TV: Tag-/Nachthelligkeit mit Nachtzeiten; CYD: Drehung und „Auto light“ über den Lichtsensor.
 - Startbild immer mit 100 % Helligkeit, danach der eingestellte Wert.
-- **Schriften liegen nicht bei** (Lizenz) – einmal selbst erzeugen, siehe [include/fonts/README.md](include/fonts/README.md).
+- Schrift **Archivo Narrow Bold** (SIL Open Font License) **liegt bei** – einfach bauen und flashen, siehe [include/fonts/README.md](include/fonts/README.md).
 
 ## Projektstruktur
 

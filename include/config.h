@@ -10,7 +10,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.1-d5"   // D5: Netz-Difficulty (quer 3 Blasen, hochkant eigene Zeile, NM-TV Labelzeile), Best Diff max 4 Nachkomma. D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
+#define MINER_VERSION     "1.3.1-d6"   // D6: Schrift Archivo Narrow Bold (OFL, darf ins Repo) statt Liberation Narrow. D5: Netz-Difficulty (quer 3 Blasen, hochkant eigene Zeile, NM-TV Labelzeile), Best Diff max 4 Nachkomma. D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 

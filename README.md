@@ -72,7 +72,7 @@ Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a 
 - Web UI → settings → **Display** (at the bottom): 3 colour designs, brightness with live preview;
   NM-TV: day/night brightness with night times; CYD: rotation and "Auto light" via the light sensor.
 - Boot screen always at 100 % brightness, then the configured value.
-- **Fonts are not included** (licence) – create them once, see [include/fonts/README.md](include/fonts/README.md).
+- Font **Archivo Narrow Bold** (SIL Open Font License) is **included** – just build and flash, see [include/fonts/README.md](include/fonts/README.md).
 
 ## Project layout
 

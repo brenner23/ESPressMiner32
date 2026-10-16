@@ -1,20 +1,21 @@
 # Display fonts / Display-Schriften
 
-The display build (`nmtv154`, `cyd`) needs Adafruit-GFX font headers `LibNarrowB<pt>pt7b.h`
-in this folder. They are **not included** in the repository (font licence). Create them once:
+The headers `ArchivoNB<pt>pt7b.h` in this folder are **included and ready to use** – just build and flash.
+
+- Font: **Archivo Narrow** (Bold, weight 700) by Omnibus-Type, from the Google Fonts archive
+  (https://github.com/google/fonts/tree/main/ofl/archivonarrow)
+- Licence: **SIL Open Font License 1.1** – see `tools/fonts/OFL-ArchivoNarrow.txt`.
+  The headers are a converted (bitmap) form of the font and are distributed under the same licence.
+- Source TTF: `tools/fonts/ArchivoNarrow[wght].ttf`
+
+Recreate or change sizes (e.g. after swapping the font):
 
 ```
 pip install freetype-py
-python tools/ttf2gfx.py LiberationSansNarrow-Bold.ttf LibNarrowB 10 12 13 14 15 16 17 18 20 include/fonts
+python tools/ttf2gfx.py --wght 700 "tools/fonts/ArchivoNarrow[wght].ttf" ArchivoNB 10 12 13 14 15 16 17 18 20 include/fonts
 ```
-
-Font used for the photos: **Liberation Sans Narrow Bold** 1.07 (Liberation Fonts license =
-GPLv2 with font exception; e.g. Windows: `C:/Windows/Fonts/LiberationSansNarrow-Bold.ttf`,
-Debian/Ubuntu: package `fonts-liberation`). Any other narrow bold TTF works too; keep the file
-names, sizes may then need a check on the device. The plain `esp32dev` build needs no fonts.
 
 ---
 
-Der Display-Build (`nmtv154`, `cyd`) braucht die Adafruit-GFX-Schriftdateien `LibNarrowB<pt>pt7b.h`
-in diesem Ordner. Sie liegen wegen der Schriftlizenz **nicht im Repo** – einmal mit dem Befehl oben
-erzeugen. Der normale Build `esp32dev` braucht keine Schriften.
+Die Schriftdateien `ArchivoNB<pt>pt7b.h` liegen **fertig bei** – einfach bauen und flashen. Schrift: Archivo Narrow
+Bold (OFL 1.1, Lizenztext in `tools/fonts/OFL-ArchivoNarrow.txt`). Neu erzeugen nur bei Änderungen, Befehl siehe oben.
