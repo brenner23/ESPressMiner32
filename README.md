@@ -219,6 +219,7 @@ Cross-check on a private Stratum pool, 24 full hours, pool difficulty 0.01 (±2 
   the miner mines for ~12 s with the slightly slower safe loop. Nothing restarts, nothing is lost – the miner is not
   "broken every 10 minutes". On networks without such waves the guard window never activates.
 - Wrong hashes never reach the pool: every hit is re-checked in software (0 rejected).
+- **Full night log** (one line per minute, ~9.8 h, no private data): [docs/nachtlauf_v1.3.1.log](docs/nachtlauf_v1.3.1.log) · [CSV](docs/nachtlauf_v1.3.1.csv)
 
 ### Since 1.2.0 (v2 loop)
 

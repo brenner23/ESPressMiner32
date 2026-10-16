@@ -219,6 +219,7 @@ Gegenprobe auf einem eigenen Stratum-Pool, 24 volle Stunden, Pool-Difficulty 0,0
   mint der Miner ~12 s lang mit der etwas langsameren sicheren Schleife. Nichts startet neu, nichts geht verloren – der
   Miner ist nicht „alle 10 Minuten kaputt“. In Netzen ohne solche Wellen springt das Schutzfenster nie an.
 - Falsche Hashes erreichen nie den Pool: Jeder Treffer wird in Software nachgerechnet (0 abgelehnt).
+- **Komplettes Nachtprotokoll** (eine Zeile pro Minute, ~9,8 h, ohne private Daten): [docs/nachtlauf_v1.3.1.log](docs/nachtlauf_v1.3.1.log) · [CSV](docs/nachtlauf_v1.3.1.csv)
 
 ### Ab 1.2.0 (v2-Schleife)
 
