@@ -71,6 +71,9 @@ Dashboard auf zwei günstigen Boards:
 - Weboberfläche → Einstellungen → **Display** (ganz unten): 3 Farbdesigns, Helligkeit mit Live-Vorschau;
   NM-TV: Tag-/Nachthelligkeit mit Nachtzeiten; CYD: Drehung und „Auto light“ über den Lichtsensor.
 - Startbild immer mit 100 % Helligkeit, danach der eingestellte Wert.
+- **Chiptemperatur** (ab d7): alle 5 s gemessen, Median der letzten 7 Werte. Hinweis: Der interne Sensor des ESP32
+  weicht von Chip zu Chip um bis zu ~30 °C ab (drei gleiche Boards zeigten beim Kaltstart 34 / 49 / 64 °C), darum greift
+  der Überhitzungsschutz erst ab 105 °C (Software-Miner pausiert) bzw. 115 °C (Mining gestoppt).
 - Schrift **Archivo Narrow Bold** (SIL Open Font License) **liegt bei** – einfach bauen und flashen, siehe [include/fonts/README.md](include/fonts/README.md).
 
 ## Projektstruktur

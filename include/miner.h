@@ -8,8 +8,7 @@ namespace miner {
 
 // Ueberhitzungsschutz (Grenzwerte in config.h: TEMP_*)
 namespace thermal {
-    void        update(float celsius);   // neuer Messwert (bei Pool-Job)
-    void        poll();                  // Statistik-Task: liest selbst, wenn > 60 s nichts kam
+    void        poll();                  // Statistik-Task (alle 5 s): messen, Median, Stufen
     int         level();                 // 0 normal, 1 SW-Miner pausiert, 2 Mining gestoppt
     const char* text();
 }

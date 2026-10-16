@@ -13,19 +13,35 @@
 // ---------------------------------------------------------------------------
 //  Ueberhitzungsschutz (ab 1.3.0.004)
 // ---------------------------------------------------------------------------
-// Interner Sensor des klassischen ESP32: grob (Versatz bis +-10 Grad), auf manchen
-// Chips unbrauchbar -> unplausible Werte werden ignoriert, statt grundlos abzuschalten.
-// Stufen mit Rueckschalt-Abstand (Hysterese), damit nichts hin- und herspringt.
+// Interner Sensor des klassischen ESP32: grob, auf manchen Chips unbrauchbar -> unplausible
+// Werte werden ignoriert, statt grundlos abzuschalten. Stufen mit Hysterese.
+// 1.3.1-d7 (Kaltstart-Test 16.10., drei NM-TV gleich kalt): Sensoren zeigten 34 / 49 / 64 C,
+// Abstand blieb unter Last gleich (+15 / +30) -> Streuung des Sensors, nicht der Waerme.
+// Einzelne Ausreisser (+10 C fuer einen Wert) loesten die Drosselung aus. Darum jetzt alle 5 s
+// messen (vorher nur bei Pool-Job), Median der letzten TEMP_MEDIAN_N Werte fuer Anzeige + Stufen.
 namespace thermal {
 
 static volatile int      s_level = 0;
-static volatile uint32_t s_lastMs = 0;
+static float             s_buf[TEMP_MEDIAN_N];
+static uint8_t           s_cnt = 0, s_pos = 0;
 
-void update(float t)
+static float median()
 {
-    s_lastMs = millis();
+    float v[TEMP_MEDIAN_N];
+    for (uint8_t i = 0; i < s_cnt; i++) v[i] = s_buf[i];
+    for (uint8_t i = 1; i < s_cnt; i++)                    // Einfuegesortierung, max. 7 Werte
+        for (uint8_t j = i; j > 0 && v[j - 1] > v[j]; j--) { float x = v[j]; v[j] = v[j - 1]; v[j - 1] = x; }
+    return v[s_cnt / 2];
+}
+
+static void update(float raw)
+{
+    if (raw < TEMP_PLAUSIBLE_MIN_C || raw > TEMP_PLAUSIBLE_MAX_C) return;   // Sensor-Unsinn
+    s_buf[s_pos] = raw;
+    s_pos = (s_pos + 1) % TEMP_MEDIAN_N;
+    if (s_cnt < TEMP_MEDIAN_N) s_cnt++;
+    const float t = median();
     g_stats.chipTemp = t;
-    if (t < TEMP_PLAUSIBLE_MIN_C || t > TEMP_PLAUSIBLE_MAX_C) return;   // Sensor-Unsinn
     int lv = s_level;
     if (t >= TEMP_STOP_C)                  lv = 2;
     else if (t >= TEMP_SW_PAUSE_C)         lv = (lv == 2) ? 2 : 1;      // aus Stufe 2 erst unter RESUME
@@ -39,8 +55,7 @@ void update(float t)
 
 void poll()
 {
-    // Rueckfall, falls lange kein Pool-Job kam (z.B. Pool weg): selbst nachlesen
-    if (millis() - s_lastMs >= 60000UL) update(temperatureRead());
+    update(temperatureRead());
 }
 
 int level() { return s_level; }

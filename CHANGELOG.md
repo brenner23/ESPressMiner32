@@ -2,6 +2,15 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1-d7 – Display-Version, Branch `display` (2026-10-16) – Teststand
+- **Temperatur:** alle 5 s gemessen (vorher nur bei neuem Pool-Job), Anzeige und Schutz nutzen den **Median der letzten
+  7 Werte** (~35 s) – einzelne Sensor-Ausreisser (+10 C fuer einen Wert) loesen nichts mehr aus.
+- **Ueberhitzungsschutz angehoben:** Software-Miner pausiert ab 105 C (vorher 90), Mining stoppt ab 115 C (vorher 100),
+  wieder frei unter 95 C (vorher 80). Grund: Kaltstart-Test mit drei NM-TV (gleich kalt, gleiche Firmware) zeigte
+  34 / 49 / 64 C, der Abstand blieb unter Last gleich -> die internen Sensoren streuen um ~30 C. Ein Geraet wurde bei
+  echten ~55-60 C (Laser/Innenluft) auf 1000 kH/s gedrosselt; jetzt laeuft es mit ~1034.
+- HW-Schleifen unveraendert (`hw_*` gleich v1.3.1, auch esp32dev), alle 5 Testgeraete 1034–1035 kH/s.
+
 ## v1.3.1-d6 – Display-Version, Branch `display` (2026-10-16) – Teststand
 - Schrift **Archivo Narrow Bold** (SIL OFL 1.1) statt Liberation Sans Narrow: darf mitgeliefert werden ->
   `include/fonts/ArchivoNB*pt7b.h` liegen bei, einfach bauen und flashen. TTF + Lizenz in `tools/fonts/`.

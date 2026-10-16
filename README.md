@@ -72,6 +72,9 @@ Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a 
 - Web UI → settings → **Display** (at the bottom): 3 colour designs, brightness with live preview;
   NM-TV: day/night brightness with night times; CYD: rotation and "Auto light" via the light sensor.
 - Boot screen always at 100 % brightness, then the configured value.
+- **Chip temperature** (since d7): measured every 5 s, median of the last 7 values. Note: the ESP32's internal sensor
+  differs from chip to chip by up to ~30 °C (three identical boards showed 34 / 49 / 64 °C at a cold start), so the
+  overheat protection only starts at 105 °C (software miner paused) / 115 °C (mining stopped).
 - Font **Archivo Narrow Bold** (SIL Open Font License) is **included** – just build and flash, see [include/fonts/README.md](include/fonts/README.md).
 
 ## Project layout

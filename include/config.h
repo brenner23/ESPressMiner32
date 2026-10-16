@@ -10,7 +10,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.1-d6"   // D6: Schrift Archivo Narrow Bold (OFL, darf ins Repo) statt Liberation Narrow. D5: Netz-Difficulty (quer 3 Blasen, hochkant eigene Zeile, NM-TV Labelzeile), Best Diff max 4 Nachkomma. D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
+#define MINER_VERSION     "1.3.1-d7"   // D7: Temperatur alle 5 s + Median (Ausreisser), Drosselung 105/115/95 statt 90/100/80. D6: Schrift Archivo Narrow Bold (OFL, darf ins Repo) statt Liberation Narrow. D5: Netz-Difficulty (quer 3 Blasen, hochkant eigene Zeile, NM-TV Labelzeile), Best Diff max 4 Nachkomma. D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
@@ -89,17 +89,23 @@
 #define HW_LOOP_TEST             0
 #endif
 
-// Ueberhitzungsschutz (ab 1.3.0.004), Werte des internen Sensors (grob, +-10 Grad Versatz).
+// Ueberhitzungsschutz (ab 1.3.0.004), Werte des internen Sensors (Median, siehe miner.cpp).
 // Ab SW_PAUSE pausiert der Software-Miner, ab STOP das ganze Mining; unter RESUME laeuft
 // alles wieder. Werte ausserhalb PLAUSIBLE gelten als Sensorfehler und werden ignoriert.
+// 1.3.1-d7: Grenzen angehoben (vorher 90/100/80). Die Sensoren streuen von Chip zu Chip um
+// 30 Grad (Kaltstart 34..64 C) -> ein NM-TV wurde bei echten ~60 C gedrosselt. Der Chip ist fuer
+// hohe Temperaturen gebaut; der Schutz soll nur echte Notfaelle abfangen, nicht die Streuung.
 #ifndef TEMP_SW_PAUSE_C
-#define TEMP_SW_PAUSE_C          90.0f
+#define TEMP_SW_PAUSE_C          105.0f
 #endif
 #ifndef TEMP_STOP_C
-#define TEMP_STOP_C              100.0f
+#define TEMP_STOP_C              115.0f
 #endif
 #ifndef TEMP_RESUME_C
-#define TEMP_RESUME_C            80.0f
+#define TEMP_RESUME_C            95.0f
+#endif
+#ifndef TEMP_MEDIAN_N
+#define TEMP_MEDIAN_N            7        // Median ueber 7 Messungen a 5 s (~35 s)
 #endif
 #define TEMP_PLAUSIBLE_MIN_C     (-20.0f)
 #define TEMP_PLAUSIBLE_MAX_C     150.0f
