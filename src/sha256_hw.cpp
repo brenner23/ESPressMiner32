@@ -321,9 +321,11 @@ extern "C" uint32_t hw_t_d_pl2(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_t_d_q4(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_t_n(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_t_o(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+#if HW_LOOP_TEST     // P/Q/R nur im Messbetrieb (siehe hw_scan_v2.S)
 extern "C" uint32_t hw_t_p(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_t_q(volatile uint32_t* sha_base, HwV2Ctx* ctx);
 extern "C" uint32_t hw_t_r(volatile uint32_t* sha_base, HwV2Ctx* ctx);
+#endif
 
 static const struct { HwV2Fn fn; const char* name; } s_v2[] = {
     { hw_v2_fast,   "v2 fast (247 cycles)" },
@@ -344,9 +346,11 @@ static const struct { HwV2Fn fn; const char* name; } s_v2[] = {
     { hw_t_d_q4,    "M D + quiet except pl2" },
     { hw_t_n,       "N D + p2 pl1 p3 quiet" },
     { hw_t_o,       "O registers + p2 pl1 quiet (240 cycles)" },
+#if HW_LOOP_TEST
     { hw_t_p,       "P O + p2 -1" },
     { hw_t_q,       "Q O + pl1 -1" },
     { hw_t_r,       "R O + d2 -1" },
+#endif
 };
 static const int V2_ALL   = sizeof(s_v2) / sizeof(s_v2[0]);
 // Rueckfallkette (Indizes in s_v2). Ab 1.3.0.002: J zuerst (Messbetrieb: 0 Fehler unter Last)

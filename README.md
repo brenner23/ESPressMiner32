@@ -46,6 +46,31 @@ There are intentionally no prebuilt firmware files: you flash what you can read 
 - **Setup without coding:** Wi-Fi portal, GUI setup tool or command line
 - **Blue LED (GPIO2)** is on while mining and blinks on every share
 
+## Display version (branch `display`, test stage)
+
+Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a dashboard on two cheap boards:
+
+| Board | Display | PlatformIO env |
+|---|---|---|
+| **NM-TV 154** | ST7789 240×240 | `nmtv154` |
+| **CYD** (ESP32-2432S028 type with ST7789) | ST7789 320×240, landscape or portrait, light sensor (GPIO 34) | `cyd` |
+
+<p>
+<img src="docs/display_nmtv154_v1.3.1-d2f.webp" alt="NM-TV 154" height="260">
+<img src="docs/display_cyd_v1.3.1-d4.webp" alt="CYD" height="260">
+</p>
+
+- Flat design: only fields whose value changed are cleared and redrawn (every 5 s, drawing task on core 0,
+  ~29 ms per pass) – the hash loop on core 1 does not notice it. The `hw_*` loops sit at exactly the same
+  addresses as in v1.3.1 (checked after every build).
+- Boot screen with progress bar and status (self-test, benchmark, Wi-Fi, pool), the IP is shown for 3 s.
+- Hashrate without decimals (truncated, never rounded up), shares, best difficulty, blocks, chip temperature,
+  clock + date (NTP), uptime and pool name.
+- Web UI → settings → **Display** (at the bottom): 3 colour designs, brightness with live preview;
+  NM-TV: day/night brightness with night times; CYD: rotation and "Auto light" via the light sensor.
+- Boot screen always at 100 % brightness, then the configured value.
+- **Fonts are not included** (licence) – create them once, see [include/fonts/README.md](include/fonts/README.md).
+
 ## Project layout
 
 ```

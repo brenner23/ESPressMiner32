@@ -1,4 +1,5 @@
 #pragma once
+#include "board.h"
 // ---------------------------------------------------------------------------
 //  Allgemeine Einstellungen
 // ---------------------------------------------------------------------------
@@ -9,7 +10,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.1"   // getestet: = 1.3.0.011-pre4 (Nachtlauf 9,6 h, 1033,7 kH/s), Dashboard zeigt nur Schleifen-Fehler
+#define MINER_VERSION     "1.3.1-d4"   // D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
@@ -138,5 +139,15 @@
 #endif
 #endif
 
+// Display (ab 1.3.1-d2): so oft prueft der Dashboard-Task, ob sich Werte geaendert haben (nur diese werden gezeichnet)
+#ifndef DISPLAY_UPDATE_MS
+#define DISPLAY_UPDATE_MS        5000
+#endif
+
 // Blaue Onboard-LED: leuchtet, solange gemint wird; kurz aus bei jedem Share. -1 = aus
+// Display-Boards: GPIO 2 ist DC des Displays -> LED aus (ab 1.3.1-d0)
+#if HAS_DISPLAY
+#define LED_PIN                  -1
+#else
 #define LED_PIN                  2
+#endif

@@ -2,6 +2,16 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1-d4 – Display-Version, Branch `display` (2026-10-16) – Teststand
+- Neue Envs `nmtv154` (NM-TV 154, ST7789 240x240) und `cyd` (CYD, ST7789 320x240), `include/board.h` mit Pins.
+- Dashboard: nur geaenderte Felder neu (alle 5 s, Task auf Core 0, ~29 ms), Startbalken mit Status, IP 3 s,
+  Hashrate ohne Nachkomma (abgeschnitten). HW-Schleifen an denselben Adressen wie v1.3.1 (`hw_*` gleich),
+  gemessen 1033–1036 kH/s, 0 Schleifenfehler.
+- Einstellungen „Display“: 3 Designs, Helligkeit mit Vorschau, NM-TV Tag/Nacht, CYD Drehung + Auto light (LDR GPIO 34).
+- Backlight per ESP-IDF-LEDC (Arduino-`ledcAttach` sprengte das volle IRAM); Messschleifen P/Q/R nur noch mit
+  `HW_LOOP_TEST` (liegen hinter O, keine genutzte Schleife verschiebt sich).
+- Schriften (Liberation Sans Narrow Bold, GPLv2 + Font-Ausnahme) nicht im Repo: `tools/ttf2gfx.py` erzeugt sie.
+
 ## v1.3.1 – Master 005 (2026-10-16) – getestet, ~1034 kH/s
 - Code = 1.3.0.011-pre4 nach Nachtlauf (9,6 h am USB-Solar-Laderegler): Ø **1033,7 kH/s** (nie unter 1032),
   0 Neustarts, 0 WLAN-Abbrueche, Shares 851/0, **2 Fehler der Schleife** + 73 aus 10 WLAN-Wellen (9 davon Stichprobe),

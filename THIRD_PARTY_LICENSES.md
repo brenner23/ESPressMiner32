@@ -26,6 +26,15 @@ Libraries fetched at build time (not part of this repository):
   - ESP-IDF                   Apache-2.0  https://github.com/espressif/esp-idf
   - pioarduino platform       Apache-2.0  https://github.com/pioarduino/platform-espressif32
 
+Display version (env nmtv154 / cyd), fetched at build time:
+  - Adafruit GFX Library      BSD         https://github.com/adafruit/Adafruit-GFX-Library
+  - Adafruit ST7735/ST7789    MIT         https://github.com/adafruit/Adafruit-ST7735-Library
+  - Adafruit BusIO            MIT         https://github.com/adafruit/Adafruit_BusIO
+  Fonts are NOT included: include/fonts/*.h are generated locally with
+  tools/ttf2gfx.py (needs freetype-py, BSD/FreeType licence) from a TTF of
+  your choice, e.g. Liberation Sans Narrow Bold (GPLv2 with font exception).
+  Layout and font sizes follow the author's own Duino-Coin display projects.
+
 Setup tools (tools/*.py) need:
   - pyserial                  BSD-3-Clause
 ```

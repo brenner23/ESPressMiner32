@@ -1,3 +1,4 @@
+#include "display.h"
 #include "miner.h"
 #include "sha256_hw.h"
 #include "web_server.h"
@@ -67,6 +68,10 @@ static void handle_stats()
     doc["wifiDrops"]   = g_stats.wifiDrops;
     doc["wifiReconnects"] = g_stats.wifiReconnects;
     doc["wifiLastReason"] = g_stats.wifiLastReason;
+    doc["dispUpdates"] = g_disp.updates;     // ab 1.3.1-d2: Messung Display-Kosten
+    doc["dispFields"]  = g_disp.fields;
+    doc["dispAvgUs"]   = g_disp.updates ? g_disp.busyUs / g_disp.updates : 0;
+    doc["dispMaxUs"]   = g_disp.maxUs;
     doc["guardActive"] = hw_sha_guard_active();
     doc["guardPeriodS"]= g_stats.guardPeriodMs / 1000.0f;
     doc["guardNextInS"]= g_stats.guardNextInS;
@@ -245,6 +250,26 @@ void web_task(void*)
         stratum_request_switch();
         s_server.send(200, "text/plain", "Switching pool");
     });
+#if HAS_DISPLAY
+    // ab 1.3.1-d3: Display-Einstellungen, wirken sofort (kein Neustart)
+    s_server.on("/api/display", HTTP_GET, [] {
+        JsonDocument d;
+        display_cfg_json(d);
+        String out;
+        serializeJson(d, out);
+        s_server.send(200, "application/json", out);
+    });
+    s_server.on("/api/display", HTTP_POST, [] {
+        JsonDocument j;
+        if (deserializeJson(j, s_server.arg("plain"))) { s_server.send(400, "text/plain", "Invalid JSON"); return; }
+        if (const char* err = display_cfg_set(j)) { s_server.send(400, "text/plain", err); return; }
+        s_server.send(200, "text/plain", "Saved");
+    });
+    s_server.on("/api/display/preview", HTTP_GET, [] {      // Vorlage: /brightness?value=
+        display_preview(s_server.arg("value").toInt());
+        s_server.send(200, "text/plain", "OK");
+    });
+#endif
     s_server.onNotFound(handle_not_found);
     s_server.begin();
 

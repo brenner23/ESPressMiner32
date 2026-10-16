@@ -407,8 +407,12 @@
     // 1.3.0.009: I und D hatten ihre Fehler nur durch die WLAN-Welle -> I + J kombinieren
     // und Block 2 / LOAD->START weiter kuerzen (p3 und p1 bleiben sicher, siehe K und H)
     PL_MINE_R hw_t_o,     .iram1.hwto,  4, 16, 39,  9, 14, 27, 10, 2, 1, 1
+#if HW_LOOP_TEST
+    // P/Q/R scheitern schon am Selbsttest (1.3.0.009) -> nur im Messbetrieb. Ab 1.3.1-d3 im Normal-Build
+    // weggelassen (IRAM voll). Sie liegen hinter O: keine genutzte Schleife verschiebt sich.
     PL_MINE_R hw_t_p,     .iram1.hwtp,  4, 16, 38,  9, 14, 27, 10, 2, 1, 1
     PL_MINE_R hw_t_q,     .iram1.hwtq2, 4, 16, 39,  8, 14, 27, 10, 2, 1, 1
     PL_MINE_R hw_t_r,     .iram1.hwtr,  4, 15, 39,  9, 14, 27, 10, 2, 1, 1
+#endif
 
 #endif

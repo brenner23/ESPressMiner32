@@ -19,3 +19,6 @@ __pycache__/
 NACHTLOG_HINWEIS.md
 STAND.md
 UPDATE_NOTIZ_*.md
+
+# Display-Schriften selbst erzeugen (include/fonts/README.md)
+include/fonts/*.h

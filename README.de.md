@@ -44,6 +44,32 @@ Es gibt bewusst keine fertigen Firmware-Dateien: Geflasht wird, was man im Quell
 - **Einrichtung ohne Programmieren:** WLAN-Portal, Setup-Programm mit Oberfläche oder Kommandozeile
 - **Blaue LED (GPIO2)** leuchtet beim Minen und blinkt bei jedem Share
 
+## Display-Version (Branch `display`, Teststand)
+
+Gleicher Miner, gleiche Hash-Schleifen (**gleiche ~1034 kH/s, keine zusätzlichen Schleifenfehler**), dazu ein
+Dashboard auf zwei günstigen Boards:
+
+| Board | Display | PlatformIO-Env |
+|---|---|---|
+| **NM-TV 154** | ST7789 240×240 | `nmtv154` |
+| **CYD** (ESP32-2432S028-Typ mit ST7789) | ST7789 320×240, quer oder hochkant, Lichtsensor (GPIO 34) | `cyd` |
+
+<p>
+<img src="docs/display_nmtv154_v1.3.1-d2f.webp" alt="NM-TV 154" height="260">
+<img src="docs/display_cyd_v1.3.1-d4.webp" alt="CYD" height="260">
+</p>
+
+- Flaches Design: Nur Felder, deren Wert sich geändert hat, werden gelöscht und neu geschrieben (alle 5 s,
+  Zeichen-Task auf Core 0, ~29 ms je Durchlauf) – die Hash-Schleife auf Core 1 merkt davon nichts. Die
+  `hw_*`-Schleifen liegen an genau denselben Adressen wie in v1.3.1 (nach jedem Bauen geprüft).
+- Startbild mit Fortschrittsbalken und Status (Selbsttest, Benchmark, WLAN, Pool), die IP steht 3 s lang da.
+- Hashrate ohne Nachkommastelle (abgeschnitten, nie aufgerundet), Shares, Best Difficulty, Blöcke,
+  Chiptemperatur, Uhr + Datum (NTP), Laufzeit und Pool-Name.
+- Weboberfläche → Einstellungen → **Display** (ganz unten): 3 Farbdesigns, Helligkeit mit Live-Vorschau;
+  NM-TV: Tag-/Nachthelligkeit mit Nachtzeiten; CYD: Drehung und „Auto light“ über den Lichtsensor.
+- Startbild immer mit 100 % Helligkeit, danach der eingestellte Wert.
+- **Schriften liegen nicht bei** (Lizenz) – einmal selbst erzeugen, siehe [include/fonts/README.md](include/fonts/README.md).
+
 ## Projektstruktur
 
 ```

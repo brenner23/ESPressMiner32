@@ -73,6 +73,22 @@ border-radius:8px;padding:9px 10px;font-size:14px}
 .btn.save:disabled{opacity:.6;cursor:default}
 .btn.cancel{background:var(--field);color:var(--txt);border:1px solid var(--ibd)}
 .msg{flex:1;font-size:13.5px;min-height:1.2em}.msg.err{color:var(--red)}.msg.ok{color:var(--green)}
+/* --- Display (ab 1.3.1-d3) --- */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{border:2px solid var(--ibd);border-radius:10px;padding:6px;cursor:pointer;background:none;color:var(--txt);font-size:12px}
+.tile.act{border-color:var(--accent)}
+.tile .sw{display:flex;gap:3px;height:26px;margin-bottom:5px;border-radius:6px;overflow:hidden;padding:3px}
+.tile .sw i{flex:1;border-radius:4px}
+.rng{display:flex;align-items:center;gap:10px}.rng input{flex:1;accent-color:var(--accent)}
+.rng b{min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
+.row2{display:flex;gap:10px}.row2 .fld{flex:1}
+.fld label.tog{display:flex;align-items:center;justify-content:space-between;color:var(--txt);font-size:14px;cursor:pointer;margin:0}
+.fld .tog input{position:absolute;opacity:0;width:0;height:0}
+.sw2{position:relative;width:44px;height:24px;border-radius:12px;background:var(--ibd);transition:.15s;flex:none}
+.sw2::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s}
+.tog input:checked+.sw2{background:var(--accent)}.tog input:checked+.sw2::after{left:23px}
+.tog input:focus-visible+.sw2{box-shadow:0 0 0 3px rgba(61,139,253,.3)}
+.dstat{color:var(--dim);font-size:12.5px;margin-top:8px}
 </style></head><body>
 <div class="top">
  <h1 id="mn">ESP32 Miner</h1>
@@ -131,6 +147,26 @@ border-radius:8px;padding:9px 10px;font-size:14px}
    <div class="sec-h">Pool switching</div>
    <div class="fld"><label for="c_altmin">Alternate automatically every N minutes &nbsp;(0 = off, switch on failure only)</label><input id="c_altmin" type="number" min="0" max="1440" value="0"></div>
   </div>
+  <div class="sec" id="dsec" style="display:none">
+   <div class="sec-h">Display <span id="dboard" style="color:var(--dim);font-weight:500;text-transform:none"></span></div>
+   <p class="dstat" style="margin:2px 0 6px">Changes here apply immediately (no restart).</p>
+   <div class="fld"><label>Design</label><div class="tiles" id="dtiles"></div></div>
+   <div class="fld" id="d_rotf" style="display:none"><label>Rotation</label><div class="seg" id="d_rot"></div></div>
+   <div class="fld"><label for="d_day" id="d_dayl">Day brightness</label>
+    <div class="rng"><input id="d_day" type="range" min="1" max="100"><b id="d_dayv"></b></div></div>
+   <div class="fld" id="d_ldrf" style="display:none"><label class="tog">Auto light (light sensor)<input type="checkbox" id="d_ldr" onchange="dSave({autoLight:this.checked})"><span class="sw2"></span></label>
+    <div class="dstat" style="margin-top:4px">On: brightness above = minimum (dark room), more light &rarr; brighter up to 100 %.</div></div>
+   <div class="fld" id="d_nonf"><label class="tog">Night mode (by time)<input type="checkbox" id="d_non" onchange="dSave({nightOn:this.checked})"><span class="sw2"></span></label></div>
+   <div id="d_night">
+    <div class="fld"><label for="d_ngt">Night brightness</label>
+     <div class="rng"><input id="d_ngt" type="range" min="0" max="100"><b id="d_ngtv"></b></div></div>
+    <div class="row2">
+     <div class="fld"><label for="d_from">Night from</label><input id="d_from" type="time" onchange="dSave({nightFrom:this.value})"></div>
+     <div class="fld"><label for="d_to">Night until</label><input id="d_to" type="time" onchange="dSave({nightTo:this.value})"></div>
+    </div>
+   </div>
+   <div class="dstat" id="dstat"></div>
+  </div>
  </div>
  <div class="mfoot">
   <span class="msg" id="cmsg"></span>
@@ -160,8 +196,36 @@ async function openCfg(){const m=$('cmsg');m.textContent='';m.className='msg';
  $('c_wpass').placeholder=c.wifiPassSet?'•••••• (unchanged)':'';
  for(let i=0;i<2;i++){const p=c.pools[i]||{};$('p'+i+'url').value=p.url||'';$('p'+i+'user').value=p.user||'';$('p'+i+'pass').value=p.pass||'x'}
  $('c_altmin').value=c.poolAltMin||0;
+ dLoad();
  $('ov').classList.add('open')}catch(e){alert('Could not load settings')}}
 function closeCfg(){if(!portal)$('ov').classList.remove('open')}
+// --- Display (ab 1.3.1-d3): Regler wie Duino-Vorlage: beim Ziehen Vorschau (immer nur 1 Anfrage), beim Loslassen speichern
+const DESIGNS=[['Classic','#080808','#101410','#f8b800','#48cc40','#38b0f8'],['Espresso','#100c08','#281c10','#e8b068','#88d488','#f0d4b0'],['Night blue','#001018','#102038','#f8d048','#40e078','#50d8f8']];
+let dPrevBusy=false,dPrevNext=null,dPrevT=0;
+function dPrev(v){if(dPrevBusy){dPrevNext=v;return}dPrevBusy=true;
+ fetch('/api/display/preview?value='+v).catch(()=>{}).finally(()=>{dPrevBusy=false;if(dPrevNext!==null){const n=dPrevNext;dPrevNext=null;dPrev(n)}})}
+async function dSave(o){const st=$('dstat');
+ try{const r=await fetch('/api/display',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
+ const t=await r.text();if(!r.ok){st.textContent=t;st.style.color='var(--red)';return}st.style.color='';dLoad(true)}catch(e){st.textContent='Saving failed'}}
+function dSlider(id,key){const el=$(id),v=$(id+'v');
+ el.oninput=()=>{v.textContent=el.value+' %';clearTimeout(dPrevT);dPrevT=setTimeout(()=>dPrev(el.value),120)};
+ el.onchange=()=>{const o={};o[key]=parseInt(el.value);dSave(o)}}
+async function dLoad(statusOnly){let d;try{const r=await fetch('/api/display');if(!r.ok)return;d=await r.json()}catch(e){return}
+ $('dsec').style.display='';$('dstat').textContent=d.status+' · display now '+d.nowBri+' %';
+ $('d_night').style.opacity=d.nightOn?1:.45;
+ if(statusOnly){$('dtiles').querySelectorAll('.tile').forEach((t,i)=>t.classList.toggle('act',i===d.design));$('d_rot').querySelectorAll('button').forEach((t,i)=>t.className=i===d.rotation?'act':'');return}
+ $('dboard').textContent='· '+d.board;
+ $('dtiles').innerHTML=DESIGNS.map((x,i)=>'<button type="button" class="tile'+(i===d.design?' act':'')+'" onclick="dSave({design:'+i+'})"><div class="sw" style="background:'+x[1]+'"><i style="background:'+x[2]+'"></i><i style="background:'+x[3]+'"></i><i style="background:'+x[4]+'"></i><i style="background:'+x[5]+'"></i></div>'+x[0]+'</button>').join('');
+ $('d_day').value=d.dayBri;$('d_dayv').textContent=d.dayBri+' %';
+ $('d_ngt').value=d.nightBri;$('d_ngtv').textContent=d.nightBri+' %';
+ $('d_non').checked=d.nightOn;$('d_night').style.opacity=d.nightOn?1:.45;
+ $('d_nonf').style.display=$('d_night').style.display=d.hasNight?'':'none';
+ $('d_ldrf').style.display=d.hasLdr?'':'none';$('d_ldr').checked=!!d.autoLight;
+ $('d_dayl').textContent=d.hasNight?'Day brightness':'Brightness';
+ $('d_rotf').style.display=d.hasRotation?'':'none';
+ $('d_rot').innerHTML=[0,1,2,3].map(r=>'<button type="button" class="'+(r===d.rotation?'act':'')+'" onclick="dSave({rotation:'+r+'})">'+(r*90)+'&deg;</button>').join('');
+ $('d_from').value=d.nightFrom;$('d_to').value=d.nightTo}
+dSlider('d_day','dayBri');dSlider('d_ngt','nightBri');
 async function saveCfg(){const m=$('cmsg'),b=$('csave');
  const body={minerName:$('c_name').value,hostname:$('c_host').value,wifiSsid:$('c_ssid').value,wifiPass:$('c_wpass').value,
  poolAltMin:parseInt($('c_altmin').value)||0,

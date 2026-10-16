@@ -18,6 +18,7 @@
 #include "web_server.h"
 #include "serial_config.h"
 #include "diag.h"
+#include "display.h"
 
 static StratumClient g_stratum;
 
@@ -239,7 +240,9 @@ void setup()
     digitalWrite(LED_PIN, LOW);
 #endif
 
+    display_begin();            // ab 1.3.1-d1: Startbild (nur auf Display-Boards)
     const bool configured = settings_load();
+    display_progress(15, "self-test");
     serial_config_start();      // Konfiguration per serieller Konsole ist immer moeglich
 
     hw_sha_begin();
@@ -260,6 +263,7 @@ void setup()
         Serial.println("SELF-TEST FAILED - mining will not start.");
         for (;;) delay(1000);
     }
+    display_progress(35, "benchmark");
     selftest_benchmark();
 #if HW_LOOP_TEST
     loop_test_prepare();
@@ -275,17 +279,28 @@ void setup()
     if (!configured) {
         // Erster Start: noch keine Zugangsdaten im NVS -> nur Portal, kein Mining
         Serial.println("[Setup] No saved settings found.");
+        display_progress(100, "setup portal (Wi-Fi AP)");
         web_start_portal(false);
         return;
     }
 
+    display_progress(50, "connecting Wi-Fi");
     if (!wifi_begin()) web_start_portal(true);
+#if HAS_DISPLAY
+    {
+        char line[48];
+        if (WiFi.status() == WL_CONNECTED) snprintf(line, sizeof(line), "IP %s", WiFi.localIP().toString().c_str());
+        else strlcpy(line, "no Wi-Fi - setup portal", sizeof(line));
+        display_progress(75, line);
+    }
+#endif
     xTaskCreatePinnedToCore(wifi_watch_task, "wifiWatch", 3072, nullptr, 1, nullptr, 0);
     diag_begin();               // nur im Test-Build (DIAG_NET) aktiv
     g_stratum.begin();
 
     xTaskCreatePinnedToCore(stratum_task, "stratum", 12288, nullptr, 3, nullptr, 0);
     xTaskCreatePinnedToCore(stats_task, "stats", 4096, nullptr, 2, nullptr, 0);
+    display_start_task();       // D2: wartet auf den Pool, dann Dashboard (nur geaenderte Felder)
 #ifdef HW_MARGIN_SWEEP
     delay(3000);                // Pool-Verbindung aufbauen lassen (WLAN-Verkehr)
     selftest_margin_sweep();
