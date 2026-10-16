@@ -57,7 +57,7 @@ Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a 
 
 <p>
 <img src="docs/display_nmtv154_v1.3.1-d2f.webp" alt="NM-TV 154" height="260">
-<img src="docs/display_cyd_v1.3.1-d4.webp" alt="CYD" height="260">
+<img src="docs/display_cyd_v1.3.1-d5.webp" alt="CYD" height="260">
 </p>
 
 - Flat design: only fields whose value changed are cleared and redrawn (every 5 s, drawing task on core 0,
@@ -66,6 +66,9 @@ Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a 
 - Boot screen with progress bar and status (self-test, benchmark, Wi-Fi, pool), the IP is shown for 3 s.
 - Hashrate without decimals (truncated, never rounded up), shares, best difficulty, blocks, chip temperature,
   clock + date (NTP), uptime and pool name.
+- **Network difficulty** (since d5): CYD landscape as a third bubble next to hashrate and best difficulty,
+  portrait in its own row, NM-TV small as "NET 75" in the label line.
+- Difficulty values with at most 4 decimals, truncated (0.0237, 5.432, 523.7), from 1000 with K/M/G/T (132.7T).
 - Web UI → settings → **Display** (at the bottom): 3 colour designs, brightness with live preview;
   NM-TV: day/night brightness with night times; CYD: rotation and "Auto light" via the light sensor.
 - Boot screen always at 100 % brightness, then the configured value.

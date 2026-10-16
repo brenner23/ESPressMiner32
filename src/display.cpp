@@ -298,8 +298,9 @@ struct Field {
 
 // Layout: Werte aus den Vorlagen. 240 breit = NM-TV (y0 0) bzw. CYD hochkant (y0 40, Vorlage nm_y()),
 // 320 breit = CYD quer (Vorlage "wide": Blasen 152 px). Wird bei Start und Drehung neu berechnet.
-static Field F_DOT, F_HASH, F_BEST, F_SHARE, F_BLOCK, F_CHIP, F_CLOCK, F_DATE, F_UP, F_POOL;
-static int16_t L_W, L_Y0, L_CW, L_C2;
+static Field F_DOT, F_HASH, F_BEST, F_NET, F_SHARE, F_BLOCK, F_CHIP, F_CLOCK, F_DATE, F_UP, F_POOL;
+static int16_t L_W, L_Y0, L_CW, L_C2, L_DY;   // L_DY: Versatz der Zeilen unter Reihe 1 (hochkant: Netz-Diff-Zeile)
+static uint8_t L_MODE;                         // 0 = 240x240 (NM-TV), 1 = hochkant 240x320, 2 = quer 320x240
 static bool    L_WIDE;
 
 static void fset(Field& f, int16_t x, int16_t y, int16_t w, int16_t h, int16_t tx, int16_t base, uint8_t align)
@@ -309,19 +310,32 @@ static void fset(Field& f, int16_t x, int16_t y, int16_t w, int16_t h, int16_t t
 
 static void layout_apply()
 {
-    L_W = s_w; L_WIDE = s_w > s_h; L_Y0 = s_h > s_w ? 40 : 0;
+    // Netz-Difficulty (User 16.10.): quer 3. Blase oben, hochkant eigene Zeile, NM-TV klein in der Best-Diff-Labelzeile
+    L_W = s_w; L_WIDE = s_w > s_h;
+    L_MODE = L_WIDE ? 2 : (s_h > s_w ? 1 : 0);
+    L_Y0 = L_MODE == 1 ? 20 : 0;            // hochkant: 279 px Inhalt mittig in 320
+    L_DY = L_MODE == 1 ? 41 : 0;
     L_CW = (L_W - 16) / 2;                 // 112 bzw. 152
     L_C2 = 5 + L_CW + 6;                   // 123 bzw. 163
-    fset(F_DOT,   L_W - 26, 5, 20, 18, 0, 0, 0);
-    fset(F_HASH,  8, 44, L_CW - 6, 35, 12, 74, 0);
-    fset(F_BEST,  L_C2 + 3, 44, L_CW - 6, 35, L_C2 + 7, 74, 0);
-    fset(F_SHARE, 80, 88, L_W - 88, 32, 84, 115, 0);
-    fset(F_BLOCK, 56, 129, L_CW - 54, 32, 58, 154, 0);
-    fset(F_CHIP,  L_C2 + 35, 129, L_CW - 38, 32, L_C2 + 37, 154, 0);
-    fset(F_CLOCK, 10, 171, 100, 33, 14, 200, 0);
-    fset(F_DATE,  100, 177, L_W - 108, 27, L_W - 12, 200, 2);
-    fset(F_UP,    10, 209, L_WIDE ? 110 : 80, 27, 14, 230, 0);
-    fset(F_POOL,  L_WIDE ? 120 : 90, 209, L_W - (L_WIDE ? 128 : 98), 27, L_W - 12, 230, 2);
+    fset(F_DOT, L_W - 26, 5, 20, 18, 0, 0, 0);
+    if (L_MODE == 2) {                     // quer: Hashrate 110 | Best 95 | Netz 95
+        fset(F_HASH, 8, 44, 104, 35, 12, 74, 0);
+        fset(F_BEST, 123, 44, 89, 35, 127, 74, 0);
+        fset(F_NET,  223, 44, 89, 35, 227, 74, 0);
+    } else {
+        fset(F_HASH, 8, 44, L_CW - 6, 35, 12, 74, 0);
+        fset(F_BEST, L_C2 + 3, 44, L_CW - 6, 35, L_C2 + 7, 74, 0);
+        if (L_MODE == 1) fset(F_NET, 100, 88, L_W - 108, 32, 104, 115, 0);       // eigene Zeile
+        else             fset(F_NET, L_C2 + 40, 34, L_CW - 46, 10, L_W - 12, 35, 2); // Labelzeile, eingebaute Schrift
+    }
+    const int16_t d = L_DY;
+    fset(F_SHARE, 80, 88 + d, L_W - 88, 32, 84, 115 + d, 0);
+    fset(F_BLOCK, 56, 129 + d, L_CW - 54, 32, 58, 154 + d, 0);
+    fset(F_CHIP,  L_C2 + 35, 129 + d, L_CW - 38, 32, L_C2 + 37, 154 + d, 0);
+    fset(F_CLOCK, 10, 171 + d, 100, 33, 14, 200 + d, 0);
+    fset(F_DATE,  100, 177 + d, L_W - 108, 27, L_W - 12, 200 + d, 2);
+    fset(F_UP,    10, 209 + d, L_WIDE ? 110 : 80, 27, 14, 230 + d, 0);
+    fset(F_POOL,  L_WIDE ? 120 : 90, 209 + d, L_W - (L_WIDE ? 128 : 98), 27, L_W - 12, 230 + d, 2);
 }
 
 static int16_t gfx_width(const char* s, const GFXfont* f)
@@ -390,7 +404,7 @@ static void draw_frame()
 {
     s_bootFull = false;                        // Dashboard da -> eingestellte Helligkeit (sanft runter)
     layout_apply();
-    const int16_t y0 = L_Y0;
+    const int16_t y0 = L_Y0, d = L_DY;
     tft.fillScreen(C_BG);
     tft.fillRect(0, y0, L_W, 27, C_PANEL2);          // Kopfband wie Vorlage
     tft.setFont(&LibNarrowB14pt7b);              // 15 pt zu breit (Foto 16.10.: "2" im Statuspunkt)
@@ -398,24 +412,53 @@ static void draw_frame()
     tft.setCursor(7, y0 + 23);
     tft.print("ESPRESSMINER32");
 
-    tft.fillRoundRect(5, y0 + 30, L_CW, 51, 7, C_PANEL);
-    tft.fillRoundRect(L_C2, y0 + 30, L_CW, 51, 7, C_PANEL);
-    label(12, y0 + 35, "HASHRATE", C_PANEL);
-    label(L_C2 + 7, y0 + 35, L_WIDE ? "BEST DIFFICULTY" : "BEST DIFF", C_PANEL);
+    if (L_MODE == 2) {
+        tft.fillRoundRect(5, y0 + 30, 110, 51, 7, C_PANEL);
+        tft.fillRoundRect(120, y0 + 30, 95, 51, 7, C_PANEL);
+        tft.fillRoundRect(220, y0 + 30, 95, 51, 7, C_PANEL);
+        label(12, y0 + 35, "HASHRATE", C_PANEL);
+        label(127, y0 + 35, "BEST DIFF", C_PANEL);
+        label(227, y0 + 35, "NETWORK DIFF", C_PANEL);
+    } else {
+        tft.fillRoundRect(5, y0 + 30, L_CW, 51, 7, C_PANEL);
+        tft.fillRoundRect(L_C2, y0 + 30, L_CW, 51, 7, C_PANEL);
+        label(12, y0 + 35, "HASHRATE", C_PANEL);
+        label(L_C2 + 7, y0 + 35, L_MODE == 1 ? "BEST DIFF" : "BEST", C_PANEL);
+        if (L_MODE == 1) {
+            tft.fillRoundRect(5, y0 + 86, L_W - 10, 36, 7, C_PANEL);
+            label(12, y0 + 100, "NETWORK DIFF", C_PANEL);
+        }
+    }
 
-    tft.fillRoundRect(5, y0 + 86, L_W - 10, 36, 7, C_PANEL);
-    label(12, y0 + 100, "SHARES R/A", C_PANEL);
+    tft.fillRoundRect(5, y0 + 86 + d, L_W - 10, 36, 7, C_PANEL);
+    label(12, y0 + 100 + d, "SHARES R/A", C_PANEL);
 
-    tft.fillRoundRect(5, y0 + 127, L_CW, 36, 7, C_PANEL);
-    tft.fillRoundRect(L_C2, y0 + 127, L_CW, 36, 7, C_PANEL);
-    label(12, y0 + 141, "BLOCKS", C_PANEL);
-    label(L_C2 + 7, y0 + 141, "CHIP", C_PANEL);
+    tft.fillRoundRect(5, y0 + 127 + d, L_CW, 36, 7, C_PANEL);
+    tft.fillRoundRect(L_C2, y0 + 127 + d, L_CW, 36, 7, C_PANEL);
+    label(12, y0 + 141 + d, "BLOCKS", C_PANEL);
+    label(L_C2 + 7, y0 + 141 + d, "CHIP", C_PANEL);
 
-    tft.fillRoundRect(5, y0 + 168, L_W - 10, 70, 14, C_PANEL2);
-    tft.drawFastHLine(14, y0 + 206, L_W - 28, C_LINE);
+    tft.fillRoundRect(5, y0 + 168 + d, L_W - 10, 70, 14, C_PANEL2);
+    tft.drawFastHLine(14, y0 + 206 + d, L_W - 28, C_LINE);
 
-    for (Field* f : { &F_HASH, &F_BEST, &F_SHARE, &F_BLOCK, &F_CHIP }) f->bg = C_PANEL;   // Design kann wechseln
+    for (Field* f : { &F_HASH, &F_BEST, &F_NET, &F_SHARE, &F_BLOCK, &F_CHIP }) f->bg = C_PANEL;   // Design kann wechseln
     for (Field* f : { &F_DOT, &F_CLOCK, &F_DATE, &F_UP, &F_POOL }) f->bg = C_PANEL2;
+}
+
+// Difficulty kompakt (User 16.10.): max. 4 Nachkommastellen, ABGESCHNITTEN (nie aufrunden), Nullen am Ende weg;
+// ab 1000 mit K/M/G/T/P und 1 Nachkommastelle (132.7T)
+static void fmt_diff(double v, char* out, size_t n)
+{
+    static const char* U[] = { "", "K", "M", "G", "T", "P", "E" };
+    int u = 0;
+    while (v >= 1000.0 && u < 6) { v /= 1000.0; u++; }
+    int dec = u ? 1 : (v < 1 ? 4 : v < 10 ? 3 : v < 100 ? 2 : 1);
+    double m = 1; for (int i = 0; i < dec; i++) m *= 10;
+    v = floor(v * m) / m;
+    snprintf(out, n, "%.*f", dec, v);
+    char* e = out + strlen(out) - 1;
+    if (strchr(out, '.')) { while (*e == '0') *e-- = 0; if (*e == '.') *e = 0; }
+    strlcat(out, U[u], n);
 }
 
 // Pool-Name aus der URL: ohne "stratum+tcp://" und ohne Port, zu breit -> ".."
@@ -453,8 +496,18 @@ static int update_fields()
     snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.khCurrent);
     n += field(F_HASH, b, fit(b, F_HASH.w - 8 - 27, { &LibNarrowB20pt7b, &LibNarrowB18pt7b, &LibNarrowB16pt7b, &LibNarrowB15pt7b }),
                C_GREEN, "kH/s");
-    format_difficulty(g_stats.bestDiff, b, sizeof(b));
+    fmt_diff(g_stats.bestDiff, b, sizeof(b));
     n += field(F_BEST, b, fit(b, F_BEST.w - 8, { &LibNarrowB20pt7b, &LibNarrowB18pt7b, &LibNarrowB16pt7b, &LibNarrowB15pt7b }), C_BLUE);
+    {   // Netz-Difficulty: quer/hochkant grosse Zahl, NM-TV klein "NET 75" in der Labelzeile
+        char v[16];
+        if (g_stats.networkDiff > 0) fmt_diff(g_stats.networkDiff, v, sizeof(v)); else strlcpy(v, "--", sizeof(v));
+        if (L_MODE == 0) {
+            snprintf(b, sizeof(b), "NET %s", v);
+            n += field(F_NET, b, nullptr, C_MUTED);
+        } else {
+            n += field(F_NET, v, fit(v, F_NET.w - 8, { &LibNarrowB20pt7b, &LibNarrowB18pt7b, &LibNarrowB16pt7b, &LibNarrowB15pt7b }), C_TEXT);
+        }
+    }
 
     snprintf(b, sizeof(b), "%lu/%lu", (unsigned long)g_stats.rejected, (unsigned long)g_stats.accepted);
     {   // Vorlage nm_share_font_for(): <= 11 Zeichen 20 pt, 12 -> 18, 13 -> 17, 14 -> 16, laenger 15

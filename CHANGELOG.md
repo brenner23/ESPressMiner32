@@ -2,6 +2,13 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1-d5 – Display-Version, Branch `display` (2026-10-16) – Teststand
+- **Netz-Difficulty** auf dem Display: CYD quer als 3. Blase (Hashrate | Best Diff | Network Diff), hochkant eigene
+  Zeile, NM-TV klein „NET 75“ in der Labelzeile der Best-Diff-Blase.
+- Difficulty-Format: hoechstens 4 Nachkommastellen, abgeschnitten (nie aufgerundet), Nullen am Ende weg, ab 1000
+  mit K/M/G/T und 1 Nachkommastelle (z. B. 132.7T bei hmpool). Zu breite Werte -> naechstkleinere Schrift.
+- HW-Schleifen unveraendert (`hw_*` gleich v1.3.1), 1032–1034 kH/s auf zwei CYDs.
+
 ## v1.3.1-d4 – Display-Version, Branch `display` (2026-10-16) – Teststand
 - Neue Envs `nmtv154` (NM-TV 154, ST7789 240x240) und `cyd` (CYD, ST7789 320x240), `include/board.h` mit Pins.
 - Dashboard: nur geaenderte Felder neu (alle 5 s, Task auf Core 0, ~29 ms), Startbalken mit Status, IP 3 s,

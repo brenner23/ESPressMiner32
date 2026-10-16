@@ -56,7 +56,7 @@ Dashboard auf zwei günstigen Boards:
 
 <p>
 <img src="docs/display_nmtv154_v1.3.1-d2f.webp" alt="NM-TV 154" height="260">
-<img src="docs/display_cyd_v1.3.1-d4.webp" alt="CYD" height="260">
+<img src="docs/display_cyd_v1.3.1-d5.webp" alt="CYD" height="260">
 </p>
 
 - Flaches Design: Nur Felder, deren Wert sich geändert hat, werden gelöscht und neu geschrieben (alle 5 s,
@@ -65,6 +65,9 @@ Dashboard auf zwei günstigen Boards:
 - Startbild mit Fortschrittsbalken und Status (Selbsttest, Benchmark, WLAN, Pool), die IP steht 3 s lang da.
 - Hashrate ohne Nachkommastelle (abgeschnitten, nie aufgerundet), Shares, Best Difficulty, Blöcke,
   Chiptemperatur, Uhr + Datum (NTP), Laufzeit und Pool-Name.
+- **Netz-Difficulty** (ab d5): CYD quer als dritte Blase neben Hashrate und Best Difficulty, hochkant in
+  eigener Zeile, NM-TV klein als „NET 75“ in der Labelzeile.
+- Difficulty-Werte mit höchstens 4 Nachkommastellen, abgeschnitten (0.0237, 5.432, 523.7), ab 1000 mit K/M/G/T (132.7T).
 - Weboberfläche → Einstellungen → **Display** (ganz unten): 3 Farbdesigns, Helligkeit mit Live-Vorschau;
   NM-TV: Tag-/Nachthelligkeit mit Nachtzeiten; CYD: Drehung und „Auto light“ über den Lichtsensor.
 - Startbild immer mit 100 % Helligkeit, danach der eingestellte Wert.
