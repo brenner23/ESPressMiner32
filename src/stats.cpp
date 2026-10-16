@@ -81,10 +81,15 @@ void stats_task(void*)
         }
 
         if (g_stats.hwErrors) {
-            // Pre 4: echte Fehler der Schleife, in Klammern die aus WLAN-Wellen
+            // Pre 4: echte Fehler der Schleife, in Klammern die aus WLAN-Wellen (nur mit SHOW_WAVE_ERRORS 1)
+#if SHOW_WAVE_ERRORS
             Serial.printf("           HW errors (discarded): %lu (+%lu from %lu Wi-Fi waves) of %lu candidates\n",
                           (unsigned long)(g_stats.hwErrors - g_stats.waveErrors), (unsigned long)g_stats.waveErrors,
                           (unsigned long)g_stats.guardBursts, (unsigned long)g_stats.candidates);
+#else
+            Serial.printf("           HW errors (discarded): %lu of %lu candidates\n",
+                          (unsigned long)(g_stats.hwErrors - g_stats.waveErrors), (unsigned long)g_stats.candidates);
+#endif
         }
     }
 }

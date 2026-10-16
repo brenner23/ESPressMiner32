@@ -301,6 +301,20 @@ Achtung: Basis (Board B) und Pre 1 (Board A) sind verschiedene Boards. Fairer Ve
 Pre 1 15.10. 22:21–22:31: 62–66 C, Shares 7/0, wifiDrops 0, Schleife O blieb. Backup
 `backups/ESPressMiner32_v1.3.0.011-pre1_1026khs.zip` + `firmware_v1.3.0.011-pre1.bin`.
 
+### Nachtlauf pre4 (15.10. 23:14 – 16.10. 08:51, 9,6 h, Hauptboard am USB-Solar-Laderegler)
+
+Logger alle 60 s (/opt/test-logger/pre4). **0 Neustarts, 0 WLAN-Abbrueche.**
+- Mittel aus totalHashes/Laufzeit: **1033,7 kH/s**, Momentwerte nie unter 1032,0 (max 1036,7). 67,2–73,3 C.
+- Fehler: 75 von 545.986 Kandidaten = **Schleife 2 + Welle 73 (10 Schuebe)**.
+  - Wellen: erste nach 8 min (ungeschuetzt, Takt noch unbekannt), danach **genau eine pro Stunde** = die Stichprobe
+    (jedes 6. Fenster, 6 x 600,26 s). Alle 48 geschuetzten Fenster: **0 Fehler**. Eine Stichprobe brachte nur 2.
+  - Echte Fehler der Schleife: **2 in 9,6 h** (02:29, 08:39), einzeln, ohne Bezug zu Welle oder Temperatur
+    = ~0,0004 % (~1 je 270.000 Kandidaten).
+- Shares 851/0 (0 abgelehnt).
+- Pool-Gegenprobe 16.10. 00–08 Uhr (8 volle Stunden, ±39): ESPressMiner **1045**, NerdMiner 942–1029 (Schnitt ~987),
+  ChatMini 992.
+Bewertung: pre4 laeuft ueber Nacht stabil mit ~1034 kH/s; die Wellen-Zaehlung trennt sauber.
+
 ## Ideen fuer spaeter (nach dem Ausreizen)
 
 - **Update ueber die Weboberflaeche** (Seite /update, Binary hochladen): kostet im Betrieb nichts, weil der Webserver

@@ -75,6 +75,7 @@ static void handle_stats()
     doc["guardErrors"] = g_stats.guardErrors;
     doc["waveErrors"]  = g_stats.waveErrors;    // Pre 4: Anteil von hwErrors aus WLAN-Wellen
     doc["loopErrors"]  = g_stats.hwErrors - g_stats.waveErrors;   // echte Fehler der Schleife
+    doc["showWave"]    = SHOW_WAVE_ERRORS ? true : false;          // Dashboard: Wellen-Teil anzeigen?
     doc["heap"]        = ESP.getFreeHeap();
     doc["version"]     = MINER_NAME " v" MINER_VERSION;
 

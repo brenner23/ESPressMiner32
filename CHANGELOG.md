@@ -2,6 +2,14 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1 – Master 005 (2026-10-16) – getestet, ~1034 kH/s
+- Code = 1.3.0.011-pre4 nach Nachtlauf (9,6 h am USB-Solar-Laderegler): Ø **1033,7 kH/s** (nie unter 1032),
+  0 Neustarts, 0 WLAN-Abbrueche, Shares 851/0, **2 Fehler der Schleife** + 73 aus 10 WLAN-Wellen (9 davon Stichprobe),
+  alle 48 geschuetzten Fenster 0 Fehler. Pool 8 h: 1045 ±39 kH/s.
+- Neu: Schalter `SHOW_WAVE_ERRORS` (ganz oben in config.h, Standard 0): Dashboard/Konsole zeigen nur die Fehler der
+  Hash-Schleife; mit 1 zusaetzlich „(+73 from 10 Wi-Fi waves)“. /api/stats zaehlt immer (`showWave` neu).
+- Screenshot docs/dashboard_v1.3.1.png (Werte nach 9 h 44 min, geschwaerzt).
+
 ## v1.3.0.011 – Master 005 (2026-10-15) – Vorabversion (pre4), ~1035 kH/s
 Schritte pre1–pre4 im Detail mit Messwerten: MESSPROTOKOLL.md (Abschnitt Master 005).
 - **pre1:** Interrupts auf Core 1 waehrend jeder HW-Charge (8192 Nonces, ~8 ms) gesperrt (`HW_IRQ_LOCK`). +~2 kH/s.

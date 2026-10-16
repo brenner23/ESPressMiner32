@@ -6,9 +6,10 @@ A Bitcoin Stratum (V1) miner for the **classic ESP32**. It drives the **SHA-256 
 through direct register access with a pipeline: the data for the next block is written while the engine
 is still computing.
 
-Measured on ESP32-D0WD-V3 @ 240 MHz: **~1035 kH/s** (hardware ~1000 kH/s at 240 cycles per double SHA-256
-+ software miner on the second core ~35 kH/s), pre-release 1.3.0.011-pre4.
-**Verified at the pool**, not just displayed: 24 h with 1.3.0.009 → 1062 ±23 kH/s arrived at 1024 kH/s displayed.
+Measured on ESP32-D0WD-V3 @ 240 MHz: **~1034 kH/s (over 1 MH/s)** (hardware ~1000 kH/s at 240 cycles per double SHA-256
++ software miner on the second core ~35 kH/s), version **1.3.1 (tested)**.
+Night run 9.6 h: average **1033.7 kH/s**, never below 1032, **0 restarts, 851/851 shares accepted, 2 calculation errors**.
+**Verified at the pool**, not just displayed: 1045 ±39 kH/s arrived over 8 full hours of that night.
 
 🔗 **Project page:** https://github.com/brenner23/ESPressMiner32
 
@@ -21,7 +22,8 @@ Measured on ESP32-D0WD-V3 @ 240 MHz: **~1035 kH/s** (hardware ~1000 kH/s at 240 
 
 | Version | kH/s | Cycles/hash | What's new |
 |---|---|---|---|
-| **1.3.0.011-pre4** (pre-release) | **~1035** | 240 + SW | Interrupts on core 1 masked per batch, fast software scan (35 kH/s), hash loops pinned in memory, Wi-Fi wave errors shown separately |
+| **1.3.1** (current, tested) | **~1034** | 240 + SW | = pre4 after a 9.6 h night run; dashboard shows only loop errors (`SHOW_WAVE_ERRORS`) |
+| 1.3.0.011-pre4 (pre-release) | ~1035 | 240 + SW | Interrupts on core 1 masked per batch, fast software scan (35 kH/s), hash loops pinned in memory, Wi-Fi wave errors shown separately |
 | 1.3.0.009 | ~1024 | 240 + SW | Loop "O" (240 cycles), Wi-Fi watchdog, guard window against periodic Wi-Fi disturbance, overheat protection, English UI |
 | 1.2.1 | ~990 | 247 + SW | Software miner on core 0 enabled again: now costs the hardware only ~3 kH/s |
 | 1.2.0 | ~963 | 247 | New "v2" hash loop from [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), known-answer test at boot, automatic fallback stages |
@@ -36,7 +38,7 @@ There are intentionally no prebuilt firmware files: you flash what you can read 
 
 ## Features
 
-- **~1035 kH/s** on a classic ESP32 (hardware SHA pipeline on core 1 + software miner on core 0)
+- **~1034 kH/s (over 1 MH/s)** on a classic ESP32 (hardware SHA pipeline on core 1 + software miner on core 0)
 - **Self-test** at boot (genesis block, 2000 random headers, 5000 nonces). If it fails, the miner does not mine.
 - **Every hit is re-checked in software** before a share is sent to the pool
 - **Web dashboard** at `http://espressminer.local/` with hashrate history, JSON at `/api/stats`
@@ -188,10 +190,13 @@ from 6 s before to 6 s after the expected moment (cost ~1 kH/s). Every 6th windo
 miner notices whether the wave is still there. After a restart the first wave hits unprotected because the period has
 to be learned again.
 
-**Display (since pre4, a measuring aid – work in progress):** the dashboard shows the errors separately, e.g.
-`2 discarded (+8 from 1 Wi-Fi wave)`. The first number are errors of the hash loop itself, in brackets the errors from
-Wi-Fi waves and the number of waves. Nothing is deleted: `/api/stats` still returns `hwErrors` (total) plus
-`waveErrors` and `loopErrors`. The split is meant for measurements and is still being refined; if in doubt, `hwErrors` counts.
+**Switch `SHOW_WAVE_ERRORS`** (top of `include/config.h`, since 1.3.1):
+- `0` (default): dashboard and console show only the errors of the hash loop, e.g. `2 discarded (calculation errors)`.
+- `1`: additionally the errors from Wi-Fi waves, e.g. `2 discarded (+73 from 10 Wi-Fi waves)` – useful for measuring
+  your own network.
+
+Nothing is deleted either way: `/api/stats` always returns `hwErrors` (total), `waveErrors` and `loopErrors`.
+The split is a measuring aid; if in doubt, `hwErrors` counts.
 
 ### Display vs. pool
 
@@ -203,7 +208,17 @@ Cross-check on a private Stratum pool, 24 full hours, pool difficulty 0.01 (±2 
 | ESPressMiner32 1.3.0.009 | 1024 | **1062 ±23** |
 | 5 other ESP32 miners (closed firmware), average | ~1027 | ~1000 |
 
-![Dashboard 1.3.0.011-pre4 after 3 minutes: 1032.8 kH/s, 0 loop errors, +8 from the first Wi-Fi wave (pool, worker and Wi-Fi redacted)](docs/dashboard_v1.3.0.011-pre4.png)
+![Dashboard after the 9.6 h night run: 1036.2 kH/s, average 1033.6, 861/861 shares, 2 discarded (pool, worker and Wi-Fi redacted)](docs/dashboard_v1.3.1.png)
+
+**How to read this screenshot** (tested build 1.3.0.011-pre4 = 1.3.1, live values after 9 h 44 min, v1.3.1 dashboard):
+- **2 discarded** = real calculation errors of the hash loop in almost 10 hours (~1 in 270,000 hits).
+- **In addition, 73 errors from 10 Wi-Fi waves were caught during this test** (FRITZ!Box router in the test network,
+  see above). They are hidden with `SHOW_WAVE_ERRORS 0` but still counted in `/api/stats` (`waveErrors`, `hwErrors`).
+  9 of the 10 waves are the hourly probe window; all 48 protected windows had 0 errors.
+- **The small dip in the hashrate chart is a guard window, not a fault:** around each expected Wi-Fi wave (~every 600 s)
+  the miner mines for ~12 s with the slightly slower safe loop. Nothing restarts, nothing is lost – the miner is not
+  "broken every 10 minutes". On networks without such waves the guard window never activates.
+- Wrong hashes never reach the pool: every hit is re-checked in software (0 rejected).
 
 ### Since 1.2.0 (v2 loop)
 

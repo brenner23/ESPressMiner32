@@ -9,9 +9,18 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.0.011-pre4"   // Master 005, Pre 4: Pre 3 + Wellen-Fehler getrennt angezeigt (waveErrors)
+#define MINER_VERSION     "1.3.1"   // getestet: = 1.3.0.011-pre4 (Nachtlauf 9,6 h, 1033,7 kH/s), Dashboard zeigt nur Schleifen-Fehler
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
+
+// ---- Anzeige: Fehler aus WLAN-Wellen (ab v1.3.1) ---------------------------------------------
+// SHOW_WAVE_ERRORS 0 = Dashboard und Konsole zeigen nur die Fehler der Hash-Schleife: "2 discarded"
+// SHOW_WAVE_ERRORS 1 = zusaetzlich die Fehler aus WLAN-Wellen:      "2 discarded (+73 from 10 Wi-Fi waves)"
+// Wellen = periodische Stoerung durch den Router (z. B. FRITZ!Box Mesh/Schluesselwechsel, alle ~600 s).
+// Gezaehlt wird immer: /api/stats liefert hwErrors (gesamt), waveErrors und loopErrors.
+#ifndef SHOW_WAVE_ERRORS
+#define SHOW_WAVE_ERRORS         0
+#endif
 
 // Difficulty, die beim Pool angefragt wird (mining.suggest_difficulty).
 // Bei ~1 MH/s ergibt 0.0005 etwa alle 8-9 Sekunden einen Share.

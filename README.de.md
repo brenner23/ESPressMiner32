@@ -6,9 +6,10 @@ Ein Bitcoin-Stratum-Miner (V1) für den **klassischen ESP32**. Er nutzt den **SH
 per direktem Registerzugriff mit einer Pipeline: Die Daten für den nächsten Block werden geschrieben,
 während die Engine noch rechnet.
 
-Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~1035 kH/s** (Hardware ~1000 kH/s mit 240 Takten pro Double-SHA256
-+ Software-Miner auf dem zweiten Kern ~35 kH/s), Vorabversion 1.3.0.011-pre4.
-**Beim Pool nachgemessen** statt nur angezeigt: 24 h mit 1.3.0.009 → 1062 ±23 kH/s angekommen bei 1024 kH/s Anzeige.
+Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~1034 kH/s (über 1 MH/s)** (Hardware ~1000 kH/s mit 240 Takten pro Double-SHA256
++ Software-Miner auf dem zweiten Kern ~35 kH/s), Version **1.3.1 (getestet)**.
+Nachtlauf 9,6 h: Ø **1033,7 kH/s**, nie unter 1032, **0 Neustarts, 851/851 Shares angenommen, 2 Rechenfehler**.
+**Beim Pool nachgemessen** statt nur angezeigt: 1045 ±39 kH/s angekommen über 8 volle Stunden dieser Nacht.
 
 🔗 **Projektseite:** https://github.com/brenner23/ESPressMiner32
 
@@ -19,7 +20,8 @@ Gemessen auf ESP32-D0WD-V3 @ 240 MHz: **~1035 kH/s** (Hardware ~1000 kH/s mit 24
 
 | Version | kH/s | Takte/Hash | Was ist neu |
 |---|---|---|---|
-| **1.3.0.011-pre4** (Vorabversion) | **~1035** | 240 + SW | Interrupts auf Core 1 je Charge gesperrt, schneller Software-Scan (35 kH/s), Hash-Schleifen an fester Stelle im Speicher, Fehler aus WLAN-Wellen getrennt angezeigt |
+| **1.3.1** (aktuell, getestet) | **~1034** | 240 + SW | = pre4 nach 9,6 h Nachtlauf; Dashboard zeigt nur Fehler der Schleife (`SHOW_WAVE_ERRORS`) |
+| 1.3.0.011-pre4 (Vorabversion) | ~1035 | 240 + SW | Interrupts auf Core 1 je Charge gesperrt, schneller Software-Scan (35 kH/s), Hash-Schleifen an fester Stelle im Speicher, Fehler aus WLAN-Wellen getrennt angezeigt |
 | 1.3.0.009 | ~1024 | 240 + SW | Schleife „O“ (240 Takte), WLAN-Wächter, Schutzfenster gegen periodische WLAN-Störungen, Überhitzungsschutz, Oberfläche auf Englisch |
 | 1.2.1 | ~990 | 247 + SW | Software-Miner auf Core 0 wieder an: kostet die Hardware nur noch ~3 kH/s |
 | 1.2.0 | ~963 | 247 | Neue Hash-Schleife „v2“ aus [NerdMiner Modded](https://github.com/HenrysCat/NerdMiner-Modded) (MIT), Known-Answer-Test beim Start, automatische Rückfallstufen |
@@ -34,7 +36,7 @@ Es gibt bewusst keine fertigen Firmware-Dateien: Geflasht wird, was man im Quell
 
 ## Funktionen
 
-- **~1035 kH/s** auf einem klassischen ESP32 (Hardware-SHA-Pipeline auf Core 1 + Software-Miner auf Core 0)
+- **~1034 kH/s (über 1 MH/s)** auf einem klassischen ESP32 (Hardware-SHA-Pipeline auf Core 1 + Software-Miner auf Core 0)
 - **Selbsttest** beim Start (Genesis-Block, 2000 Zufalls-Header, 5000 Nonces). Schlägt er fehl, wird nicht gemint.
 - **Jeder Treffer wird in Software nachgerechnet**, bevor ein Share zum Pool geht
 - **Web-Dashboard** unter `http://espressminer.local/` mit Hashrate-Verlauf, JSON unter `/api/stats`
@@ -189,10 +191,12 @@ Zeitpunkt mit einer etwas vorsichtigeren Schleife (Kosten ~1 kH/s). Jedes 6. Fen
 damit der Miner merkt, ob die Welle noch da ist. Nach einem Neustart trifft die erste Welle ungeschützt, weil der Takt
 erst gelernt wird.
 
-**Anzeige (ab pre4, Messhilfe – noch in Arbeit):** Das Dashboard zeigt die Fehler getrennt, z. B.
-`2 discarded (+8 from 1 Wi-Fi wave)`. Die erste Zahl sind Fehler der Hash-Schleife selbst, in Klammern die Fehler aus
-WLAN-Wellen und die Anzahl der Wellen. Nichts wird gelöscht: `/api/stats` liefert weiter `hwErrors` (gesamt) sowie
-`waveErrors` und `loopErrors`. Die Zählung ist für Messungen gedacht und wird noch verfeinert; im Zweifel gilt `hwErrors`.
+**Schalter `SHOW_WAVE_ERRORS`** (ganz oben in `include/config.h`, ab 1.3.1):
+- `0` (Standard): Dashboard und Konsole zeigen nur die Fehler der Hash-Schleife, z. B. `2 discarded (calculation errors)`.
+- `1`: zusätzlich die Fehler aus WLAN-Wellen, z. B. `2 discarded (+73 from 10 Wi-Fi waves)` – zum Ausmessen des eigenen Netzes.
+
+Gelöscht wird in keinem Fall etwas: `/api/stats` liefert immer `hwErrors` (gesamt), `waveErrors` und `loopErrors`.
+Die Aufteilung ist eine Messhilfe; im Zweifel gilt `hwErrors`.
 
 ### Display gegen Pool
 
@@ -204,7 +208,17 @@ Gegenprobe auf einem eigenen Stratum-Pool, 24 volle Stunden, Pool-Difficulty 0,0
 | ESPressMiner32 1.3.0.009 | 1024 | **1062 ±23** |
 | 5 andere ESP32-Miner (geschlossene Firmware), Schnitt | ~1027 | ~1000 |
 
-![Dashboard 1.3.0.011-pre4 nach 3 Minuten: 1032,8 kH/s, 0 Fehler der Schleife, +8 aus der ersten WLAN-Welle (Pool, Worker und WLAN geschwärzt)](docs/dashboard_v1.3.0.011-pre4.png)
+![Dashboard nach dem 9,6-h-Nachtlauf: 1036,2 kH/s, Ø 1033,6, 861/861 Shares, 2 discarded (Pool, Worker und WLAN geschwärzt)](docs/dashboard_v1.3.1.png)
+
+**So liest man diesen Screenshot** (getesteter Stand 1.3.0.011-pre4 = 1.3.1, Live-Werte nach 9 h 44 min, Dashboard von 1.3.1):
+- **2 discarded** = echte Rechenfehler der Hash-Schleife in knapp 10 Stunden (~1 von 270.000 Treffern).
+- **Zusätzlich wurden in diesem Test 73 Fehler aus 10 WLAN-Wellen abgefangen** (FRITZ!Box im Testnetz, siehe oben).
+  Mit `SHOW_WAVE_ERRORS 0` werden sie nicht angezeigt, aber weiter in `/api/stats` gezählt (`waveErrors`, `hwErrors`).
+  9 der 10 Wellen sind die stündliche Stichprobe; alle 48 geschützten Fenster hatten 0 Fehler.
+- **Die kleine Delle im Hashrate-Verlauf ist ein Schutzfenster, kein Fehler:** Um jede erwartete WLAN-Welle (~alle 600 s)
+  mint der Miner ~12 s lang mit der etwas langsameren sicheren Schleife. Nichts startet neu, nichts geht verloren – der
+  Miner ist nicht „alle 10 Minuten kaputt“. In Netzen ohne solche Wellen springt das Schutzfenster nie an.
+- Falsche Hashes erreichen nie den Pool: Jeder Treffer wird in Software nachgerechnet (0 abgelehnt).
 
 ### Ab 1.2.0 (v2-Schleife)
 
