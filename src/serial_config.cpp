@@ -107,7 +107,7 @@ static void serial_config_task(void*)
         }
 
         // BOOT-Taste lange gedrueckt -> Werkseinstellungen
-        if (digitalRead(RESET_BUTTON_PIN) == LOW) {
+        if (BOOT_RESET_ENABLE && digitalRead(RESET_BUTTON_PIN) == LOW) {
             if (!bootPressedSince) bootPressedSince = millis();
             if (millis() - bootPressedSince > BOOT_HOLD_MS) {
                 Serial.println("[Setup] BOOT button held - erasing settings");

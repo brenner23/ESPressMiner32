@@ -9,7 +9,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.1"   // getestet: = 1.3.0.011-pre4 (Nachtlauf 9,6 h, 1033,7 kH/s), Dashboard zeigt nur Schleifen-Fehler
+#define MINER_VERSION     "1.3.1.001"   // aus Micro-USB 1.1.1.003: Neustart-Uebergabe, Pool-/WLAN-Tausch gespeichert, Wi-Fi 2, Schnell-Setup, Klapp-Abschnitte. Mining-Code = 1.3.1
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
@@ -117,6 +117,8 @@
 #define WIFI_RECONNECT_EVERY_MS  20000UL
 // ... und hilft das nicht, startet der Miner neu.
 #define WIFI_REBOOT_AFTER_MS     (3UL * 60UL * 1000UL)
+// ab .003: auf WLAN 2 so oft nachsehen, ob WLAN 1 wieder da ist (wie Pool: 10 min)
+#define WIFI2_RETRY_PRIMARY_MS   (10UL * 60UL * 1000UL)
 
 // Schutzfenster (ab 1.3.0.008): Ein Geraet im Netz (Mesh/Router) stoert den ESP alle
 // ~600 s fuer einen Augenblick (4-8 HW-Fehler auf einen Schlag). Der Miner lernt diesen
@@ -136,6 +138,11 @@
 #else
 #define HW_GUARD_PROBE_EVERY     6        // jedes 6. Fenster ungeschuetzt (Stichprobe: Welle noch da?)
 #endif
+#endif
+
+// BOOT-Taste 5 s halten = Einstellungen loeschen (0 = aus)
+#ifndef BOOT_RESET_ENABLE
+#define BOOT_RESET_ENABLE        1
 #endif
 
 // Blaue Onboard-LED: leuchtet, solange gemint wird; kurz aus bei jedem Share. -1 = aus

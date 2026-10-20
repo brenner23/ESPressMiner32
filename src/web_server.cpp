@@ -2,6 +2,10 @@
 #include "sha256_hw.h"
 #include "web_server.h"
 #include "config.h"
+#include <utility>
+
+void wifi_note_swapped();   // main.cpp
+#include "handover.h"
 #include "settings.h"
 #include "mining_job.h"
 #include "stats.h"
@@ -29,6 +33,7 @@ static void handle_stats()
     doc["hashrate"]    = g_stats.khCurrent;
     doc["average"]     = g_stats.khAverage;
     doc["uptime"]      = g_stats.uptimeS;
+    doc["restarts"]    = handover::restarts();   // Neustarts seit der letzten Stromtrennung
     doc["totalHashes"] = (double)g_stats.totalHashes;
     doc["accepted"]    = g_stats.accepted;
     doc["submitted"]   = g_stats.submitted;
@@ -60,7 +65,9 @@ static void handle_stats()
     doc["hasSecondary"]= g_settings.pools[1].url.length() > 0;
     doc["poolAltMin"]  = g_settings.poolAltMin;
     doc["portal"]      = web_portal_active();
-    doc["ssid"]        = g_settings.wifiSsid;
+    doc["ssid"]        = WiFi.isConnected() ? WiFi.SSID() : g_settings.wifiSsid;   // ab .003: das verbundene Netz
+    doc["wifiNet"]     = g_stats.wifiNet;           // 1 oder 2
+    doc["noPool"]      = g_settings.pools[0].url.isEmpty() && g_settings.pools[1].url.isEmpty();
     doc["ip"]          = WiFi.localIP().toString();
     doc["rssi"]        = WiFi.RSSI();
     doc["channel"]     = WiFi.channel();
@@ -237,13 +244,37 @@ void web_task(void*)
     s_server.on("/api/config", HTTP_GET, handle_config_get);
     s_server.on("/api/config", HTTP_POST, handle_config_post);
     s_server.on("/api/scan", HTTP_GET, handle_scan);
+    // ab .003: Wi-Fi 1 und Wi-Fi 2 dauerhaft tauschen (ohne Neustart, Verbindung bleibt)
+    s_server.on("/api/swapwifi", HTTP_POST, [] {
+        if (g_settings.wifiSsid2.isEmpty()) {
+            s_server.send(400, "text/plain", "No Wi-Fi 2 configured");
+            return;
+        }
+        Settings s = g_settings;
+        std::swap(s.wifiSsid, s.wifiSsid2);
+        std::swap(s.wifiPass, s.wifiPass2);
+        if (!settings_save(s)) {
+            s_server.send(500, "text/plain", "Saving failed");
+            return;
+        }
+        wifi_note_swapped();
+        Serial.printf("[Web] Wi-Fi swapped - Wi-Fi 1 is now \"%s\"\n", s.wifiSsid.c_str());
+        s_server.send(200, "text/plain", "Wi-Fi 1 and 2 swapped and saved");
+    });
+    // Klapp-Zustand der Settings-Abschnitte (Bitmuster), im NVS - gilt fuer Handy und PC gleich
+    s_server.on("/api/fold", HTTP_POST, [] {
+        settings_save_fold((uint16_t)s_server.arg("b").toInt());
+        s_server.send(200, "text/plain", "ok");
+    });
     s_server.on("/api/switchpool", HTTP_POST, [] {
         if (g_settings.pools[1].url.isEmpty()) {
             s_server.send(400, "text/plain", "No secondary pool configured");
             return;
         }
-        stratum_request_switch();
-        s_server.send(200, "text/plain", "Switching pool");
+        // Ab 1.1.1.002: echter Tausch ohne Neustart - Primary und Secondary werden in den Settings
+        // vertauscht, gespeichert und der neue Primary sofort verbunden (erledigt der Stratum-Task)
+        stratum_request_swap();
+        s_server.send(200, "text/plain", "Pools swapped and saved");
     });
     s_server.onNotFound(handle_not_found);
     s_server.begin();

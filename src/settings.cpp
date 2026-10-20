@@ -15,6 +15,7 @@ Settings g_settings;
 static const char* NVS_NAMESPACE = "espressminer";
 // Frueherer Projektname: vorhandene Einstellungen werden einmalig uebernommen
 static const char* NVS_LEGACY    = "claudeminer";
+#define DEFAULT_MINER_NAME "ESP32 Miner"
 static bool        s_configured  = false;
 
 // Liest die Einstellungen aus einem Namespace; fehlende Werte kommen aus credentials.h
@@ -23,10 +24,12 @@ static bool load_from(const char* ns)
     Preferences p;
     p.begin(ns, true);
     bool configured          = p.getBool("cfg", false) || p.isKey("ssid");
-    g_settings.minerName     = p.getString("mname", "ESP32 Miner");
+    g_settings.minerName     = p.getString("mname", DEFAULT_MINER_NAME);
     g_settings.hostname      = p.getString("host", WEB_MDNS_NAME);
     g_settings.wifiSsid      = p.getString("ssid", WIFI_SSID);
     g_settings.wifiPass      = p.getString("wpass", WIFI_PASSWORD);
+    g_settings.wifiSsid2     = p.getString("ssid2", "");
+    g_settings.wifiPass2     = p.getString("wpass2", "");
     g_settings.pools[0].url  = p.getString("p1url", POOL_URL);
     g_settings.pools[0].user = p.getString("p1user", POOL_USER);
     g_settings.pools[0].pass = p.getString("p1pass", POOL_PASSWORD);
@@ -70,6 +73,8 @@ bool settings_save(const Settings& s)
     p.putString("host", s.hostname);
     p.putString("ssid", s.wifiSsid);
     p.putString("wpass", s.wifiPass);
+    p.putString("ssid2", s.wifiSsid2);
+    p.putString("wpass2", s.wifiPass2);
     p.putString("p1url", s.pools[0].url);
     p.putString("p1user", s.pools[0].user);
     p.putString("p1pass", s.pools[0].pass);
@@ -103,6 +108,10 @@ void settings_apply_json(JsonVariantConst j, Settings& s)
     assign_trimmed(s.minerName, j["minerName"]);
     assign_trimmed(s.hostname, j["hostname"]);
     assign_trimmed(s.wifiSsid, j["wifiSsid"]);
+    assign_trimmed(s.wifiSsid2, j["wifiSsid2"]);
+    const char* wpass2 = j["wifiPass2"] | "";
+    if (wpass2[0]) s.wifiPass2 = wpass2;
+    if (s.wifiSsid2.isEmpty()) s.wifiPass2 = "";
     if (!j["poolAltMin"].isNull()) s.poolAltMin = j["poolAltMin"].as<uint16_t>();
     const char* wpass = j["wifiPass"] | "";
     if (wpass[0]) s.wifiPass = wpass;
@@ -126,10 +135,11 @@ const char* settings_validate(const Settings& s)
     if (s.minerName.isEmpty())                      return "Display name missing";
     if (s.hostname.isEmpty())                       return "Hostname missing";
     if (s.wifiSsid.isEmpty())                       return "Wi-Fi SSID missing";
-    if (s.pools[0].url.isEmpty())                   return "Primary pool URL missing";
     if (!valid_pool_url(s.pools[0].url) || !valid_pool_url(s.pools[1].url))
         return "Pool URL must look like: stratum+tcp://host:port";
-    if (s.pools[0].user.isEmpty())                  return "Wallet address (primary) missing";
+    // ab .003 Schnell-Setup: Pool darf leer bleiben (erst ins WLAN, Pool/Wallet spaeter am PC)
+    if (s.pools[0].url.length() && s.pools[0].user.isEmpty()) return "Wallet address (primary) missing";
+    if (s.pools[0].url.isEmpty() && s.pools[1].url.length())  return "Enter the pool as Primary first";
     if (s.pools[1].url.length() && s.pools[1].user.isEmpty())
         return "Wallet address (secondary) missing";
     return nullptr;
@@ -141,6 +151,9 @@ void settings_to_json(JsonObject o)
     o["hostname"]    = g_settings.hostname;
     o["wifiSsid"]    = g_settings.wifiSsid;
     o["wifiPassSet"] = g_settings.wifiPass.length() > 0;
+    o["wifiSsid2"]   = g_settings.wifiSsid2;
+    o["wifiPass2Set"] = g_settings.wifiPass2.length() > 0;
+    o["fold"]        = settings_fold();
     o["configured"]  = s_configured;
     o["poolAltMin"]  = g_settings.poolAltMin;
     JsonArray pools = o["pools"].to<JsonArray>();
@@ -149,5 +162,24 @@ void settings_to_json(JsonObject o)
         po["url"]  = pc.url;
         po["user"] = pc.user;
         po["pass"] = pc.pass;
+    }
+}
+
+// Klapp-Zustand der Settings-Abschnitte: eigener Schluessel, damit Handy und PC dasselbe sehen
+uint16_t settings_fold()
+{
+    Preferences p;
+    p.begin(NVS_NAMESPACE, true);
+    uint16_t b = p.getUShort("fold", 0xFFFF);
+    p.end();
+    return b;
+}
+
+void settings_save_fold(uint16_t bits)
+{
+    Preferences p;
+    if (p.begin(NVS_NAMESPACE, false)) {
+        p.putUShort("fold", bits);
+        p.end();
     }
 }

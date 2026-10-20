@@ -20,6 +20,7 @@ Nachtlauf 9,6 h: Ø **1033,7 kH/s**, nie unter 1032, **0 Neustarts, 851/851 Shar
 
 | Version | kH/s | Takte/Hash | Was ist neu |
 |---|---|---|---|
+| 1.3.1.001 (Vorabversion) | ~1035 | 240 + SW | Neustart-Übergabe, WLAN 2, Tausch-Knöpfe (gespeichert), Schnell-Setup, aufklappbare Einstellungen – Hash-Schleifen unverändert |
 | **1.3.1** (aktuell, getestet) | **~1034** | 240 + SW | = pre4 nach 9,6 h Nachtlauf; Dashboard zeigt nur Fehler der Schleife (`SHOW_WAVE_ERRORS`) |
 | 1.3.0.011-pre4 (Vorabversion) | ~1035 | 240 + SW | Interrupts auf Core 1 je Charge gesperrt, schneller Software-Scan (35 kH/s), Hash-Schleifen an fester Stelle im Speicher, Fehler aus WLAN-Wellen getrennt angezeigt |
 | 1.3.0.009 | ~1024 | 240 + SW | Schleife „O“ (240 Takte), WLAN-Wächter, Schutzfenster gegen periodische WLAN-Störungen, Überhitzungsschutz, Oberfläche auf Englisch |
@@ -34,13 +35,31 @@ Es gibt bewusst keine fertigen Firmware-Dateien: Geflasht wird, was man im Quell
 
 ---
 
+## Neu in 1.3.1.001 (Vorabversion, im Test)
+
+Gleiche Hash-Schleifen wie 1.3.1 (geprüft: identische Adressen im Speicher, ~1035 kH/s), neue Komfort-Funktionen
+aus dem [Micro-USB-/Ghost-Pod-Projekt](https://github.com/brenner23/ESPressMiner32-MicroUSB-GhostPod) (1.1.1.003):
+
+- **Betriebszeit übersteht Neustarts:** Nach einem Neustart *ohne* Stromtrennung (WLAN-Wächter, Absturz, Speichern der
+  Einstellungen) laufen Betriebszeit, Best Diff und Blockfunde weiter; Shares beginnen bei 0. Nach einer Stromtrennung
+  beginnt alles bei 0 – an der Betriebszeit sieht man also, ob das Gerät durchgelaufen ist. Dashboard: `↻1` = ein Neustart.
+- **Zweites WLAN (optional):** wird versucht, wenn WLAN 1 nicht erreichbar ist (beim Start, bei Verbindungsverlust, bei
+  offenem Portal). Auf WLAN 2 prüft der Miner alle 10 min, ob WLAN 1 wieder da ist, und geht dorthin zurück.
+- **Tausch-Knöpfe, dauerhaft gespeichert, ohne Neustart:** „⇅ Swap Wi-Fi 1 & 2“ und „⇅ Swap pools“ (in den
+  Einstellungen und im Dashboard). Der alte „Switch“ schaltete nur bis zum nächsten Neustart um.
+- **Schnell-Setup:** Im Einrichtungs-Portal reicht das WLAN – Pool und Wallet später bequem am PC eintragen.
+- **Aufklappbare Einstellungen** (General · Wi-Fi 1 · Wi-Fi 2 · Primary · Secondary · Pool switching); der Miner merkt
+  sich, was offen ist – Handy und PC sehen gleich aus.
+
 ## Funktionen
 
 - **~1034 kH/s (über 1 MH/s)** auf einem klassischen ESP32 (Hardware-SHA-Pipeline auf Core 1 + Software-Miner auf Core 0)
 - **Selbsttest** beim Start (Genesis-Block, 2000 Zufalls-Header, 5000 Nonces). Schlägt er fehl, wird nicht gemint.
 - **Jeder Treffer wird in Software nachgerechnet**, bevor ein Share zum Pool geht
 - **Web-Dashboard** unter `http://espressminer.local/` mit Hashrate-Verlauf, JSON unter `/api/stats`
-- **Primary- und Secondary-Pool** mit automatischem Wechsel
+- **Primary- und Secondary-Pool** mit automatischem Wechsel (nach 10 min zurück zum Primary), Knopf **⇅ Swap pools** (gespeichert, ohne Neustart)
+- **Optionales zweites WLAN** mit Rückkehr zu WLAN 1 alle 10 min
+- **Neustart-Übergabe:** Betriebszeit, Best Diff und Blocks laufen bei Neustarts ohne Stromtrennung weiter
 - **Einrichtung ohne Programmieren:** WLAN-Portal, Setup-Programm mit Oberfläche oder Kommandozeile
 - **Blaue LED (GPIO2)** leuchtet beim Minen und blinkt bei jedem Share
 
@@ -55,6 +74,7 @@ ESPressMiner32/
 │   ├── sha256_hw.h           Hardware-SHA-Pipeline
 │   ├── sha256_sw.h           Software-SHA-256 (Coinbase, Merkle, Prüfung)
 │   ├── stratum_client.h      Stratum-V1-Client
+│   ├── handover.h            Werte, die einen Neustart überstehen (RTC-Speicher)
 │   ├── mining_job.h          Job-/Share-Austausch zwischen den Tasks
 │   └── ...
 ├── src/                      Implementierungen zu den Headern + main.cpp

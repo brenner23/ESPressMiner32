@@ -8,6 +8,7 @@
 #include <esp_system.h>
 
 #include "config.h"
+#include "handover.h"
 #include "settings.h"
 #include "miner.h"
 #include "mining_job.h"
@@ -129,12 +130,34 @@ static void led_task(void*)
 
 // Ab 1.3.0.008: immer alle Kanaele absuchen und im Mesh den staerksten Knoten nehmen,
 // nichts im NVS zwischenspeichern (sonst wird ein alter Kanal / Knoten weiterverwendet)
+// Ab .003: zweites WLAN. Jeder Verbindungsversuch nimmt das naechste eingetragene Netz
+// (WLAN 1, WLAN 2, WLAN 1, ...); verbunden bleibt er mit dem, das zuerst antwortet.
+static int s_wifiIdx = 0;   // 0 = WLAN 1, 1 = WLAN 2 (das gerade versuchte bzw. verbundene)
+static bool wifi2_set() { return g_settings.wifiSsid2.length() > 0; }
+
 static void wifi_connect()
 {
     WiFi.persistent(false);
     WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
     WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
-    WiFi.begin(g_settings.wifiSsid.c_str(), g_settings.wifiPass.c_str());
+    const String& ssid = s_wifiIdx ? g_settings.wifiSsid2 : g_settings.wifiSsid;
+    const String& pass = s_wifiIdx ? g_settings.wifiPass2 : g_settings.wifiPass;
+    g_stats.wifiNet = s_wifiIdx + 1;
+    WiFi.begin(ssid.c_str(), pass.c_str());
+}
+
+// Vom Webserver nach "Wi-Fi 1 <-> Wi-Fi 2 tauschen": das verbundene Netz hat jetzt die andere Nummer
+void wifi_note_swapped()
+{
+    if (wifi2_set()) s_wifiIdx ^= 1;
+    g_stats.wifiNet = s_wifiIdx + 1;
+}
+
+// Naechstes Netz fuer den naechsten Versuch (nur wenn WLAN 2 eingetragen ist)
+static void wifi_next()
+{
+    if (wifi2_set()) s_wifiIdx ^= 1;
+    else s_wifiIdx = 0;
 }
 
 static void wifi_event(arduino_event_id_t event, arduino_event_info_t info)
@@ -152,7 +175,7 @@ static void wifi_event(arduino_event_id_t event, arduino_event_info_t info)
 // WIFI_RECONNECT_EVERY_MS erneut); nach WIFI_REBOOT_AFTER_MS hilft nur noch ein Neustart.
 static void wifi_watch_task(void*)
 {
-    uint32_t lostAt = 0, lastTry = 0;
+    uint32_t lostAt = 0, lastTry = 0, onWifi2Since = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         if (web_portal_active() && !g_settings.wifiSsid.length()) continue;
@@ -160,6 +183,27 @@ static void wifi_watch_task(void*)
         if (WiFi.status() == WL_CONNECTED) {
             if (lostAt) Serial.printf("[WiFi] back after %lu s\n", (unsigned long)((now - lostAt) / 1000));
             lostAt = 0;
+            // ab .003: auf WLAN 2 alle WIFI2_RETRY_PRIMARY_MS kurz nachsehen, ob WLAN 1 wieder da ist
+            // (wie beim Pool: Secondary -> nach 10 min zurueck zum Primary)
+            if (s_wifiIdx == 1 && wifi2_set()) {
+                if (!onWifi2Since) onWifi2Since = now;
+                if (now - onWifi2Since >= WIFI2_RETRY_PRIMARY_MS) {
+                    onWifi2Since = now;
+                    const int n = WiFi.scanNetworks(false, false);
+                    bool seen = false;
+                    for (int i = 0; i < n && !seen; i++) seen = (WiFi.SSID(i) == g_settings.wifiSsid);
+                    WiFi.scanDelete();
+                    if (seen) {
+                        Serial.printf("[WiFi] Wi-Fi 1 \"%s\" is back - switching from Wi-Fi 2\n", g_settings.wifiSsid.c_str());
+                        s_wifiIdx = 0;
+                        WiFi.disconnect(false, false);
+                        vTaskDelay(pdMS_TO_TICKS(200));
+                        wifi_connect();   // klappt es nicht, wechselt der Waechter nach 10 s wieder auf WLAN 2
+                    }
+                }
+            } else {
+                onWifi2Since = 0;
+            }
             continue;
         }
         if (!lostAt) {
@@ -180,6 +224,7 @@ static void wifi_watch_task(void*)
             Serial.printf("[WiFi] reconnecting (scan all channels, reason %d)\n", g_stats.wifiLastReason);
             WiFi.disconnect(false, false);
             vTaskDelay(pdMS_TO_TICKS(200));
+            wifi_next();        // ab .003: im Wechsel auch WLAN 2 versuchen (falls eingetragen)
             wifi_connect();
         }
     }
@@ -193,19 +238,25 @@ static bool wifi_begin()
     WiFi.setSleep(false);
     WiFi.setAutoReconnect(true);
     WiFi.onEvent(wifi_event);
-    wifi_connect();
-
-    Serial.printf("[WiFi] Connecting to \"%s\" ", g_settings.wifiSsid.c_str());
-    uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_CONNECT_TIMEOUT_MS) {
-        delay(250);
-        Serial.print('.');
+    // ab .003: mit WLAN 2 bekommt jedes Netz die halbe Wartezeit (zusammen weiter 20 s)
+    const int tries = wifi2_set() ? 2 : 1;
+    for (int t = 0; t < tries && WiFi.status() != WL_CONNECTED; t++) {
+        if (t) { WiFi.disconnect(false, false); delay(200); wifi_next(); }
+        wifi_connect();
+        Serial.printf("[WiFi] Connecting to \"%s\" (Wi-Fi %d) ",
+                      (s_wifiIdx ? g_settings.wifiSsid2 : g_settings.wifiSsid).c_str(), s_wifiIdx + 1);
+        uint32_t t0 = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_CONNECT_TIMEOUT_MS / tries) {
+            delay(250);
+            Serial.print('.');
+        }
+        Serial.println();
     }
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\n[WiFi] Connected, IP %s, RSSI %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+        Serial.printf("[WiFi] Connected, IP %s, RSSI %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
         return true;
     }
-    Serial.println("\n[WiFi] not reachable - starting setup portal as well");
+    Serial.println("[WiFi] not reachable - starting setup portal as well");
     return false;
 }
 
@@ -231,6 +282,7 @@ void setup()
         Serial.println();
     }
     Serial.println("==============================================");
+    handover::restore();        // Neustart ohne Stromtrennung: Betriebszeit, Best Diff, Blocks weiter
     Serial.printf("CPU %lu MHz, free heap %lu bytes\n",
                   (unsigned long)getCpuFrequencyMhz(), (unsigned long)ESP.getFreeHeap());
 
@@ -238,6 +290,7 @@ void setup()
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
 #endif
+
 
     const bool configured = settings_load();
     serial_config_start();      // Konfiguration per serieller Konsole ist immer moeglich

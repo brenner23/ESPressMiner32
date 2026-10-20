@@ -40,6 +40,7 @@ struct MinerStats {
     volatile float    khCurrent;
     volatile float    khAverage;
     volatile uint32_t uptimeS;
+    volatile uint8_t  wifiNet;          // ab .003: 1 = WLAN 1, 2 = WLAN 2 (zuletzt versucht/verbunden)
     volatile uint64_t totalHashes;
     float             history[STATS_HISTORY_LEN];   // kH/s, Ringpuffer
     volatile uint16_t historyHead;

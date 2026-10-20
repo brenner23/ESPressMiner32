@@ -54,6 +54,8 @@ box-shadow:0 20px 60px var(--shadow);animation:pop .18s ease-out}
 .seg button.act{background:var(--accent);color:#fff}
 .intro{color:var(--dim);font-size:13.5px;margin:0 0 14px;line-height:1.5}
 .sec{border:1px solid var(--line);border-radius:12px;padding:6px 14px 14px;margin:0 0 16px}
+.sec-h{cursor:pointer;user-select:none}.sec-h:before{content:"BE  "}.sec.zu .sec-h:before{content:"B8  "}
+.sec.zu{padding-bottom:6px}.sec.zu>:not(.sec-h){display:none}
 .sec-h{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase;
 padding:12px 2px 4px}
 .fld{margin:10px 0}
@@ -86,7 +88,7 @@ border-radius:8px;padding:9px 10px;font-size:14px}
 </div>
 <div class="wide"><div class="lbl">Hashrate history (10 min)</div><canvas id="cv"></canvas></div>
 <div class="wide"><table>
- <tr><td>Pool (<span id="pname">-</span>)</td><td><span class="dot" id="pd"></span><span id="pool">-</span> <button id="swbtn" class="swbtn" style="display:none" onclick="switchPool()">&#8646; Switch</button></td></tr>
+ <tr><td>Pool (<span id="pname">-</span>)</td><td><span class="dot" id="pd"></span><span id="pool">-</span> <button id="swbtn" class="swbtn" style="display:none" onclick="switchPool()" title="Swap Primary and Secondary Pool - saved permanently, no restart">&#8645; Swap pools (saved)</button></td></tr>
  <tr><td>Worker</td><td id="user">-</td></tr>
  <tr><td>Pool difficulty</td><td id="pdiff">-</td></tr>
  <tr><td>Network difficulty</td><td id="ndiff">-</td></tr>
@@ -104,28 +106,43 @@ border-radius:8px;padding:9px 10px;font-size:14px}
   <div class="seg"><button type="button" id="thDark" onclick="setTheme('dark')">Dark</button><button type="button" id="thLight" onclick="setTheme('light')">Light</button></div>
  </div>
  <div class="mbody">
-  <p class="intro" id="cintro" style="display:none">Welcome! Enter a name, your Wi-Fi and the pool. The miner then restarts and connects to your Wi-Fi.</p>
+  <p class="intro" id="cintro" style="display:none">Welcome! Your Wi-Fi is enough to start: the miner restarts, joins your Wi-Fi, and you enter pool and wallet later on the PC (open the dashboard there).</p>
   <div class="sec">
    <div class="sec-h">General</div>
    <div class="fld"><label for="c_name">Display name</label><input id="c_name" maxlength="32" placeholder="ESP32 Miner"></div>
    <div class="fld"><label for="c_host">Network name (hostname)</label><input id="c_host" maxlength="32"></div>
+  </div>
+  <div class="sec">
+   <div class="sec-h">Wi-Fi 1</div>
    <div class="fld"><label for="c_ssid">Wi-Fi name (SSID)</label>
     <div class="scanrow"><input id="c_ssid" maxlength="32"><button type="button" class="scanbtn" id="scanbtn" onclick="scanWifi()">&#128246; Scan</button></div>
     <select id="ssidsel" class="ssidsel" style="display:none" onchange="if(this.value)$('c_ssid').value=this.value"></select>
    </div>
    <div class="fld"><label for="c_wpass">Wi-Fi password</label><input id="c_wpass" type="password" maxlength="64"></div>
+   <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="swapWifi()" title="Wi-Fi 2 becomes Wi-Fi 1 and vice versa - saved permanently, connection stays">&#8645; Swap Wi-Fi 1 &amp; 2 (saved)</button></div>
+  </div>
+  <div class="sec">
+   <div class="sec-h">Wi-Fi 2 (optional)</div>
+   <div class="fld"><label for="c_ssid2">Wi-Fi name (SSID) &nbsp;&ndash; tried whenever Wi-Fi 1 is not reachable, empty = none</label>
+    <div class="scanrow"><input id="c_ssid2" maxlength="32"><button type="button" class="scanbtn" id="scanbtn2" onclick="scanWifi(2)">&#128246; Scan</button></div>
+    <select id="ssidsel2" class="ssidsel" style="display:none" onchange="if(this.value)$('c_ssid2').value=this.value"></select>
+   </div>
+   <div class="fld"><label for="c_wpass2">Wi-Fi password</label><input id="c_wpass2" type="password" maxlength="64"></div>
+   <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="swapWifi()" title="Wi-Fi 2 becomes Wi-Fi 1 and vice versa - saved permanently, connection stays">&#8645; Swap Wi-Fi 1 &amp; 2 (saved)</button></div>
   </div>
   <div class="sec">
    <div class="sec-h">Primary Pool</div>
-   <div class="fld"><label for="p0url">Pool address</label><input id="p0url" placeholder="stratum+tcp://host:port"></div>
+   <div class="fld"><label for="p0url">Pool address</label><input id="p0url" placeholder="stratum+tcp://host:port  (empty = Wi-Fi only, no mining yet)"></div>
    <div class="fld"><label for="p0user">Wallet address</label><input id="p0user"></div>
    <div class="fld"><label for="p0pass">Pool password</label><input id="p0pass"></div>
+   <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="switchPool()" title="Swap Primary and Secondary Pool - saved permanently, no restart">&#8645; Swap pools (saved)</button></div>
   </div>
   <div class="sec">
    <div class="sec-h">Secondary Pool (optional)</div>
    <div class="fld"><label for="p1url">Pool address</label><input id="p1url" placeholder="empty = no secondary pool"></div>
    <div class="fld"><label for="p1user">Wallet address</label><input id="p1user"></div>
    <div class="fld"><label for="p1pass">Pool password</label><input id="p1pass"></div>
+   <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="switchPool()" title="Swap Primary and Secondary Pool - saved permanently, no restart">&#8645; Swap pools (saved)</button></div>
   </div>
   <div class="sec">
    <div class="sec-h">Pool switching</div>
@@ -157,6 +174,8 @@ async function openCfg(){const m=$('cmsg');m.textContent='';m.className='msg';
  $('ctitle').textContent=portal?'Set up miner':'Settings';
  try{const c=await(await fetch('/api/config')).json();
  $('c_name').value=c.minerName||'';$('c_host').value=c.hostname||'';$('c_ssid').value=c.wifiSsid||'';$('c_wpass').value='';
+ $('c_ssid2').value=c.wifiSsid2||'';$('c_wpass2').value='';$('c_wpass2').placeholder=c.wifiPass2Set?'•••••• (unchanged)':'';
+ fold(portal?6:(c.fold==null?0xFFFF:c.fold));
  $('c_wpass').placeholder=c.wifiPassSet?'•••••• (unchanged)':'';
  for(let i=0;i<2;i++){const p=c.pools[i]||{};$('p'+i+'url').value=p.url||'';$('p'+i+'user').value=p.user||'';$('p'+i+'pass').value=p.pass||'x'}
  $('c_altmin').value=c.poolAltMin||0;
@@ -164,6 +183,7 @@ async function openCfg(){const m=$('cmsg');m.textContent='';m.className='msg';
 function closeCfg(){if(!portal)$('ov').classList.remove('open')}
 async function saveCfg(){const m=$('cmsg'),b=$('csave');
  const body={minerName:$('c_name').value,hostname:$('c_host').value,wifiSsid:$('c_ssid').value,wifiPass:$('c_wpass').value,
+ wifiSsid2:$('c_ssid2').value,wifiPass2:$('c_wpass2').value,
  poolAltMin:parseInt($('c_altmin').value)||0,
  pools:[0,1].map(i=>({url:$('p'+i+'url').value,user:$('p'+i+'user').value,pass:$('p'+i+'pass').value}))};
  b.disabled=true;m.className='msg';m.textContent='Saving ...';
@@ -174,10 +194,21 @@ async function saveCfg(){const m=$('cmsg'),b=$('csave');
  m.textContent='Saved. Miner is restarting (about 15 s) ...';waitBack()}
  catch(e){m.className='msg err';m.textContent='Saving failed';b.disabled=false}}
 function waitBack(){setTimeout(async function p(){try{await fetch('/api/stats',{cache:'no-store'});location.reload()}catch(e){setTimeout(p,2000)}},8000)}
-async function switchPool(){const b=$('swbtn');b.disabled=true;const old=b.innerHTML;b.textContent='switching ...';
- try{const r=await fetch('/api/switchpool',{method:'POST'});await r.text()}catch(e){}
- setTimeout(()=>{b.disabled=false;b.innerHTML=old},4000)}
-async function scanWifi(){const b=$('scanbtn'),sel=$('ssidsel');b.disabled=true;const old=b.innerHTML;b.textContent='Scanning ...';
+// Abschnitte auf-/zuklappen (wie .81): Bit i = Abschnitt i offen. 0xFFFF = Standard
+// (General, Wi-Fi 1, Primary offen). Zustand im Miner gespeichert -> Handy und PC gleich.
+function fold(bits){const S=[...document.querySelectorAll('#ov .sec')];
+ S.forEach((k,i)=>{const o=bits==0xFFFF?(i<2||i==3):(bits>>i)&1;k.classList.toggle('zu',!o);
+  k.firstElementChild.onclick=()=>{k.classList.toggle('zu');if(portal)return;let b=0;S.forEach((x,j)=>{if(!x.classList.contains('zu'))b|=1<<j});
+   fetch('/api/fold?b='+b,{method:'POST'}).catch(()=>{})}})}
+async function swapWifi(){if(portal||!$('c_ssid2').value.trim()){alert('Enter and save Wi-Fi 2 first');return}
+ if(!confirm('Swap Wi-Fi 1 and Wi-Fi 2 permanently?\nSaved right away, the current connection stays.'))return;
+ try{const r=await fetch('/api/swapwifi',{method:'POST'});const t=await r.text();if(!r.ok){alert(t);return}}catch(e){}
+ openCfg()}
+async function switchPool(){if(!confirm('Swap Primary and Secondary Pool permanently?\nSaved right away, the miner connects to the new Primary (no restart).'))return;
+ const b=$('swbtn');b.disabled=true;b.textContent='swapping ...';
+ try{const r=await fetch('/api/switchpool',{method:'POST'});const t=await r.text();if(!r.ok){alert(t);b.disabled=false;b.innerHTML='&#8645; Swap pools (saved)';return}}catch(e){}
+ setTimeout(()=>{b.disabled=false;b.innerHTML='&#8645; Swap pools (saved)';if($('ov').classList.contains('open'))openCfg()},2500)}
+async function scanWifi(n){const x=n==2?'2':'',b=$('scanbtn'+x),sel=$('ssidsel'+x);b.disabled=true;const old=b.innerHTML;b.textContent='Scanning ...';
  try{const j=await(await fetch('/api/scan')).json();const ns=j.nets||[];
  ns.sort((a,c)=>c.rssi-a.rssi);
  sel.innerHTML='<option value="">'+(ns.length?('-- '+ns.length+' networks found --'):'-- no networks found --')+'</option>';
@@ -210,12 +241,12 @@ async function tick(){try{const s=await(await fetch('/api/stats')).json();
   // v1.3.1: Wellen-Teil nur mit SHOW_WAVE_ERRORS 1 (config.h, kommt als showWave aus /api/stats)
   $('shsub2').textContent=le+' discarded (calculation errors)'
     +(s.showWave&&we?' (+'+we+' from '+(s.guardBursts||0)+' Wi-Fi wave'+((s.guardBursts||0)==1?'':'s')+')':'');}
- $('best').textContent=fd(s.bestDiff);$('up').textContent=fu(s.uptime);$('tot').textContent=fh(s.totalHashes);
- $('pool').textContent=s.pool+(s.authorized?'':s.connected?' (connecting...)':' (disconnected)');
+ $('best').textContent=fd(s.bestDiff);$('up').textContent=fu(s.uptime)+(s.restarts?' ↻'+s.restarts:'');$('up').title=s.restarts?s.restarts+' restart(s) without power loss - uptime continues':'since power-on';$('tot').textContent=fh(s.totalHashes);
+ $('pool').textContent=s.noPool?'no pool yet - enter it in Settings':s.pool+(s.authorized?'':s.connected?' (connecting...)':' (disconnected)');
  $('pd').className='dot'+(s.authorized?' on':'');$('pname').textContent=s.poolName+(s.poolAltMin?' ⇆ every '+s.poolAltMin+' min':'');$('user').textContent=s.user;
  $('swbtn').style.display=s.hasSecondary?'':'none';
  $('pdiff').textContent=fd(s.poolDiff);$('ndiff').textContent=fd(s.netDiff);$('blk').textContent=s.blocks;
- $('wifi').textContent=s.ip+' · '+s.rssi+' dBm';
+ $('wifi').textContent=(s.wifiNet==2?'Wi-Fi 2 · ':'')+s.ip+' · '+s.rssi+' dBm';$('wifi').title=s.ssid||'';
  $('ctemp').textContent=(s.chipTemp?s.chipTemp.toFixed(1)+' °C':'-')+(s.thermalLevel?' · '+s.thermal:'');$('heap').textContent=(s.heap/1024).toFixed(1)+' KB';
  $('ver').textContent=s.version;draw(s.history);if(s.portal&&!portal){portal=true;openCfg()}}catch(e){$('pd').className='dot'}}
 tick();setInterval(tick,3000);addEventListener('resize',()=>{if(lastHist.length)draw(lastHist)});

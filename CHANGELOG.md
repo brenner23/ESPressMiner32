@@ -2,6 +2,19 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1.001 – Master 005 (2026-10-20) – Vorabversion, Funktionen aus Micro-USB 1.1.1.003
+- Uebernommen aus brenner23/ESPressMiner32-MicroUSB-GhostPod (Stand 1.1.1.003), ohne die Ghost-Pod-Teile:
+- **Neustart-Uebergabe** (`handover.cpp`, RTC-Speicher): Betriebszeit, Best Diff, Blocks laufen bei Neustart ohne
+  Stromtrennung weiter, Shares beginnen bei 0; power-on/brownout = Neuanfang. /api/stats `restarts`, Dashboard „↻n“.
+- **Zweites WLAN** (`ssid2`/`wpass2`): wird im Wechsel versucht, wenn WLAN 1 fehlt (Start, Verlust, Portal);
+  auf WLAN 2 alle 10 min Scan nach WLAN 1 -> zurueck. /api/stats `wifiNet`, `ssid` = verbundenes Netz.
+- **Tausch-Knoepfe, dauerhaft gespeichert, ohne Neustart:** „⇅ Swap Wi-Fi 1 & 2“ (`/api/swapwifi`) und „⇅ Swap pools“
+  (`/api/switchpool`, vorher nur voruebergehendes Umschalten).
+- **Schnell-Setup:** Pool darf leer bleiben, dann nur WLAN + Dashboard („no pool yet“).
+- **Einstellungen aufklappbar** (Bitmuster im NVS `fold`, `/api/fold`), im Portal Wi-Fi 1 + 2 offen.
+- Hash-Schleifen an **derselben Adresse wie v1.3.1** (hw_t_o 0x40093510, geprueft). Erster Lauf (20.10.):
+  1032–1036 kH/s (HW ~1000 + SW ~35), alle Selbsttests OK, 0 Fehler, Shares angenommen.
+
 ## v1.3.1 – Master 005 (2026-10-16) – getestet, ~1034 kH/s
 - Code = 1.3.0.011-pre4 nach Nachtlauf (9,6 h am USB-Solar-Laderegler): Ø **1033,7 kH/s** (nie unter 1032),
   0 Neustarts, 0 WLAN-Abbrueche, Shares 851/0, **2 Fehler der Schleife** + 73 aus 10 WLAN-Wellen (9 davon Stichprobe),
