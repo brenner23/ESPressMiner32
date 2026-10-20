@@ -20,6 +20,9 @@ void wifi_note_swapped();   // main.cpp
 #include <ESPmDNS.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#if WEB_UPDATE_ENABLE
+#include <Update.h>
+#endif
 
 static WebServer s_server(80);
 
@@ -161,9 +164,82 @@ static void handle_config_post()
 
     s_server.send(200, "text/plain", "Saved - restarting ...");
     Serial.println("[Web] Settings saved, restarting ...");
+    handover::forget();      // vom Nutzer gewollt -> kein Neustart-Zaehler
     vTaskDelay(pdMS_TO_TICKS(500));
     ESP.restart();
 }
+
+#if WEB_UPDATE_ENABLE
+// Kennung, an der eine passende Firmware erkannt wird (steht so in jeder Firmware dieses Boards)
+static const char FW_TAG[] __attribute__((used)) = FW_BOARD_TAG;
+static bool   s_updOk = false;
+static String s_updErr;
+static size_t s_updTotal = 0;
+static char   s_tail[48];          // Ende des vorigen Stuecks (Kennung kann ueber die Grenze gehen)
+static size_t s_tailLen = 0;
+static bool   s_tagSeen = false;
+
+static bool find_tag(const uint8_t* buf, size_t len)
+{
+    static const size_t T = sizeof(FW_BOARD_TAG) - 1;
+    uint8_t tmp[sizeof(s_tail) + 1460];
+    size_t n = 0;
+    memcpy(tmp, s_tail, s_tailLen); n = s_tailLen;
+    const size_t take = len < sizeof(tmp) - n ? len : sizeof(tmp) - n;
+    memcpy(tmp + n, buf, take); n += take;
+    bool found = false;
+    for (size_t i = 0; i + T <= n && !found; i++) found = memcmp(tmp + i, FW_BOARD_TAG, T) == 0;
+    s_tailLen = n < sizeof(s_tail) ? n : sizeof(s_tail);
+    memcpy(s_tail, tmp + n - s_tailLen, s_tailLen);
+    return found;
+}
+
+static void handle_update_upload()
+{
+    HTTPUpload& up = s_server.upload();
+    if (up.status == UPLOAD_FILE_START) {
+        Serial.printf("[Update] receiving %s - mining paused\n", up.filename.c_str());
+        miner::g_paused = true;
+        vTaskDelay(pdMS_TO_TICKS(300));       // laufende Charge zu Ende rechnen lassen
+        s_updOk = false; s_updErr = ""; s_updTotal = 0; s_tailLen = 0; s_tagSeen = false;
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) s_updErr = String("Update start failed: ") + Update.errorString();
+    } else if (up.status == UPLOAD_FILE_WRITE) {
+        if (!s_updErr.isEmpty()) return;
+        if (s_updTotal == 0 && (up.currentSize == 0 || up.buf[0] != 0xE9)) {
+            s_updErr = "Not an ESP32 firmware file (.bin)";
+            Update.abort();
+            return;
+        }
+        if (!s_tagSeen) s_tagSeen = find_tag(up.buf, up.currentSize);
+        if (Update.write(up.buf, up.currentSize) != up.currentSize) {
+            s_updErr = String("Write failed: ") + Update.errorString();
+            Update.abort();
+            return;
+        }
+        s_updTotal += up.currentSize;
+    } else if (up.status == UPLOAD_FILE_END) {
+        if (!s_updErr.isEmpty()) { Serial.printf("[Update] failed: %s\n", s_updErr.c_str()); return; }
+        if (!s_tagSeen) {
+            s_updErr = "Wrong firmware: this file is not for this board (" FW_BOARD_TAG " missing)";
+            Update.abort();
+            Serial.println("[Update] rejected - board tag missing");
+            return;
+        }
+        if (Update.end(true)) {
+            s_updOk = true;
+            Serial.printf("[Update] %u bytes written and verified\n", (unsigned)s_updTotal);
+        } else {
+            s_updErr = String("Update failed: ") + Update.errorString();
+            Serial.printf("[Update] failed: %s\n", s_updErr.c_str());
+        }
+    } else if (up.status == UPLOAD_FILE_ABORTED) {
+        Update.abort();
+        s_updErr = "Upload aborted";
+        miner::g_paused = false;
+        Serial.println("[Update] aborted - mining continues");
+    }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 //  Einrichtungs-Portal (Access Point + Captive Portal)
@@ -266,6 +342,41 @@ void web_task(void*)
         Serial.printf("[Web] Wi-Fi swapped - Wi-Fi 1 is now \"%s\"\n", s.wifiSsid.c_str());
         s_server.send(200, "text/plain", "Wi-Fi 1 and 2 swapped and saved");
     });
+    // ab 1.3.1.002: nur Wi-Fi 2 speichern, ohne Neustart (wirkt beim naechsten Verbindungsversuch)
+    s_server.on("/api/wifi2", HTTP_POST, [] {
+        JsonDocument in;
+        if (deserializeJson(in, s_server.arg("plain"))) {
+            s_server.send(400, "text/plain", "Invalid JSON");
+            return;
+        }
+        Settings s = g_settings;
+        s.wifiSsid2 = (const char*)(in["wifiSsid2"] | "");
+        s.wifiSsid2.trim();
+        const char* pw = in["wifiPass2"] | "";
+        if (pw[0]) s.wifiPass2 = pw;
+        if (s.wifiSsid2.isEmpty()) s.wifiPass2 = "";
+        if (!settings_save(s)) {
+            s_server.send(500, "text/plain", "Saving failed");
+            return;
+        }
+        Serial.printf("[Web] Wi-Fi 2 saved: \"%s\" (no restart)\n", s.wifiSsid2.c_str());
+        s_server.send(200, "text/plain", s.wifiSsid2.isEmpty() ? "Wi-Fi 2 removed" : "Wi-Fi 2 saved");
+    });
+#if WEB_UPDATE_ENABLE
+    // ab 1.3.1.002-test: Firmware-Upload (.bin). Mining pausiert, Datei wird geprueft
+    // (ESP-Image + Board-Kennung FW_BOARD_TAG), erst dann umgeschaltet und neu gestartet.
+    s_server.on("/api/update", HTTP_POST, [] {
+        const bool ok = !Update.hasError() && s_updOk;
+        s_server.send(ok ? 200 : 400, "text/plain", ok ? "Update OK - restarting ..." : s_updErr);
+        if (ok) {
+            Serial.println("[Update] done - restarting");
+            handover::forget();
+            vTaskDelay(pdMS_TO_TICKS(500));
+            ESP.restart();
+        }
+        miner::g_paused = false;
+    }, handle_update_upload);
+#endif
     // Klapp-Zustand der Settings-Abschnitte (Bitmuster), im NVS - gilt fuer Handy und PC gleich
     s_server.on("/api/fold", HTTP_POST, [] {
         settings_save_fold((uint16_t)s_server.arg("b").toInt());

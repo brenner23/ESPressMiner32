@@ -10,7 +10,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.1-d8"   // D8: Unterbau aus main 1.3.1.001 (Neustart-Uebergabe, Wi-Fi 2, Tausch-Knoepfe gespeichert, Schnell-Setup, Klapp-Abschnitte). D7: Temperatur alle 5 s + Median (Ausreisser), Drosselung 105/115/95 statt 90/100/80. D6: Schrift Archivo Narrow Bold (OFL, darf ins Repo) statt Liberation Narrow. D5: Netz-Difficulty (quer 3 Blasen, hochkant eigene Zeile, NM-TV Labelzeile), Best Diff max 4 Nachkomma. D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
+#define MINER_VERSION     "1.3.1-d9"   // D9: Unterbau aus main 1.3.1.002 (Firmware-Upload im Web mit Board-Kennung, Neustart-Zaehler nur bei Abbruechen, Save Wi-Fi 2). D8: Unterbau aus main 1.3.1.001 (Neustart-Uebergabe, Wi-Fi 2, Tausch-Knoepfe gespeichert, Schnell-Setup, Klapp-Abschnitte). D7: Temperatur alle 5 s + Median (Ausreisser), Drosselung 105/115/95 statt 90/100/80. D6: Schrift Archivo Narrow Bold (OFL, darf ins Repo) statt Liberation Narrow. D5: Netz-Difficulty (quer 3 Blasen, hochkant eigene Zeile, NM-TV Labelzeile), Best Diff max 4 Nachkomma. D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
@@ -150,6 +150,19 @@
 // Display (ab 1.3.1-d2): so oft prueft der Dashboard-Task, ob sich Werte geaendert haben (nur diese werden gezeichnet)
 #ifndef DISPLAY_UPDATE_MS
 #define DISPLAY_UPDATE_MS        5000
+#endif
+
+// Firmware-Upload ueber die Weboberflaeche (ab 1.3.1.002-test). Braucht zwei App-Bereiche
+// (platformio.ini: min_spiffs.csv). Die Datei muss die Kennung FW_BOARD_TAG enthalten (falsches Board -> abgelehnt).
+#ifndef WEB_UPDATE_ENABLE
+#define WEB_UPDATE_ENABLE        1
+#endif
+#if defined(BOARD_NMTV154)
+#define FW_BOARD_TAG             "ESPM32-BOARD:nmtv154"
+#elif defined(BOARD_CYD)
+#define FW_BOARD_TAG             "ESPM32-BOARD:cyd"
+#else
+#define FW_BOARD_TAG             "ESPM32-BOARD:usbc-devkit"
 #endif
 
 // BOOT-Taste 5 s halten = Einstellungen loeschen (0 = aus)

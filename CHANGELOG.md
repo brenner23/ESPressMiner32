@@ -2,6 +2,20 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1-d9 – Display-Version, Branch `display` (2026-10-20)
+- Unterbau aus `main` 1.3.1.002: Firmware-Upload in der Weboberflaeche mit eigener Board-Kennung je Geraet
+  (`ESPM32-BOARD:nmtv154` / `ESPM32-BOARD:cyd` / `ESPM32-BOARD:usbc-devkit`) – NM-TV-Firmware wird auf einem CYD abgelehnt
+  und umgekehrt. Neustart-Zaehler nur bei Abbruechen, „Save Wi-Fi 2“ ohne Neustart. Partitionen `min_spiffs.csv`
+  (einmal per USB umstellen). Display-Teil unveraendert.
+
+## v1.3.1.002 – Master 005 (2026-10-20) – Vorabversion, Firmware-Update im Web
+- **Firmware-Upload** in den Einstellungen (`/api/update`): Mining pausiert (`miner::g_paused`), Pruefung ESP-Image (0xE9)
+  + Board-Kennung `FW_BOARD_TAG` ("ESPM32-BOARD:usbc-devkit"), sonst abgelehnt; danach Neustart. Partitionen `min_spiffs.csv`
+  (2 x 1,9 MB, NVS unveraendert) -> einmal per USB. Gemessen .62: 1034,2 mit / 1034,5 ohne (Rauschen), hw_* gleiche Adressen.
+  Update 1,19 MB in 10,8 s. Noch kein Passwortschutz.
+- **Neustart durch den Nutzer** (Save & restart, Update, Konsole) -> `handover::forget()`: keine Uebergabe, kein Zaehler.
+- **„Save Wi-Fi 2“** (`/api/wifi2`, auch Enter im Feld): speichert WLAN 2 ohne Neustart.
+
 ## v1.3.1-d8 – Display-Version, Branch `display` (2026-10-20)
 - Unterbau aus `main` 1.3.1.001 uebernommen (Merge): Neustart-Uebergabe, zweites WLAN, Tausch-Knoepfe fuer WLAN und
   Pools (gespeichert, ohne Neustart), Schnell-Setup ohne Pool, aufklappbare Einstellungen. Display-Teil unveraendert.

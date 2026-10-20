@@ -20,6 +20,7 @@ Nachtlauf 9,6 h: Ø **1033,7 kH/s**, nie unter 1032, **0 Neustarts, 851/851 Shar
 
 | Version | kH/s | Takte/Hash | Was ist neu |
 |---|---|---|---|
+| 1.3.1.002 (Vorabversion) | ~1034 | 240 + SW | Firmware-Update in der Weboberfläche (Board-Prüfung, Mining pausiert), Neustart-Zähler nur bei Abbrüchen, WLAN 2 speichern ohne Neustart |
 | 1.3.1.001 (Vorabversion) | ~1035 | 240 + SW | Neustart-Übergabe, WLAN 2, Tausch-Knöpfe (gespeichert), Schnell-Setup, aufklappbare Einstellungen – Hash-Schleifen unverändert |
 | **1.3.1** (aktuell, getestet) | **~1034** | 240 + SW | = pre4 nach 9,6 h Nachtlauf; Dashboard zeigt nur Fehler der Schleife (`SHOW_WAVE_ERRORS`) |
 | 1.3.0.011-pre4 (Vorabversion) | ~1035 | 240 + SW | Interrupts auf Core 1 je Charge gesperrt, schneller Software-Scan (35 kH/s), Hash-Schleifen an fester Stelle im Speicher, Fehler aus WLAN-Wellen getrennt angezeigt |
@@ -35,7 +36,19 @@ Es gibt bewusst keine fertigen Firmware-Dateien: Geflasht wird, was man im Quell
 
 ---
 
-## Neu in 1.3.1.001 (Vorabversion, im Test)
+## Neu in 1.3.1.002 (Vorabversion)
+
+- **Firmware-Update in der Weboberfläche:** Einstellungen → *Firmware update* → `firmware.bin` wählen → *Upload & install*.
+  Während des Uploads pausiert das Mining (~11 s für 1,2 MB), danach startet der Miner neu. Die Datei wird vorher geprüft:
+  ESP32-Image **und** Kennung dieses Boards (`FW_BOARD_TAG` in config.h) – Firmware für ein anderes Board wird abgelehnt.
+  Gemessen auf demselben Board: **1034,2 kH/s mit gegen 1034,5 ohne** Update-Funktion (Rauschen) – im Leerlauf kostet sie nichts.
+  Braucht zwei App-Bereiche (`min_spiffs.csv`): **einmal per USB umstellen** (`pio run -t upload`), Einstellungen bleiben. Danach geht es übers WLAN.
+  ⚠️ Noch ohne Passwort: Jeder im eigenen WLAN könnte eine Firmware aufspielen. Nur im eigenen Netz verwenden.
+- **Neustart-Zähler nur noch bei echten Abbrüchen:** „Save & restart“, Firmware-Update oder Neustart über die Konsole
+  beginnen bei 0 (kein `↻`). Watchdog, Absturz und WLAN-Wächter übergeben Betriebszeit, Best Diff und Blocks wie bisher.
+- **„💾 Save Wi-Fi 2“** (oder Enter im Feld): speichert WLAN 2 ohne Neustart.
+
+## Neu in 1.3.1.001 (Vorabversion)
 
 Gleiche Hash-Schleifen wie 1.3.1 (geprüft: identische Adressen im Speicher, ~1035 kH/s), neue Komfort-Funktionen
 aus dem [Micro-USB-/Ghost-Pod-Projekt](https://github.com/brenner23/ESPressMiner32-MicroUSB-GhostPod) (1.1.1.003):
@@ -65,7 +78,7 @@ aus dem [Micro-USB-/Ghost-Pod-Projekt](https://github.com/brenner23/ESPressMiner
 
 ## Display-Version (Branch `display`, Teststand)
 
-**Ab 1.3.1-d8** hat die Display-Version dieselben Neuerungen wie 1.3.1.001 (Neustart-Übergabe, WLAN 2, Tausch-Knöpfe, Schnell-Setup).
+**Ab 1.3.1-d9** hat die Display-Version dieselben Funktionen wie 1.3.1.002 (Neustart-Übergabe, WLAN 2, Tausch-Knöpfe, Schnell-Setup, **Firmware-Update in der Weboberfläche** mit eigener Board-Kennung je Display-Typ).
 
 Gleicher Miner, gleiche Hash-Schleifen (**gleiche ~1034 kH/s, keine zusätzlichen Schleifenfehler**), dazu ein
 Dashboard auf zwei günstigen Boards:

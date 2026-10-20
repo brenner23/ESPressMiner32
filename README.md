@@ -22,6 +22,7 @@ Night run 9.6 h: average **1033.7 kH/s**, never below 1032, **0 restarts, 851/85
 
 | Version | kH/s | Cycles/hash | What's new |
 |---|---|---|---|
+| 1.3.1.002 (pre-release) | ~1034 | 240 + SW | Firmware update in the web UI (board check, mining paused), restart counter only on aborts, save Wi-Fi 2 without restart |
 | 1.3.1.001 (pre-release) | ~1035 | 240 + SW | Restart handover, Wi-Fi 2, swap buttons (saved), quick setup, collapsible settings – hash loops unchanged |
 | **1.3.1** (current, tested) | **~1034** | 240 + SW | = pre4 after a 9.6 h night run; dashboard shows only loop errors (`SHOW_WAVE_ERRORS`) |
 | 1.3.0.011-pre4 (pre-release) | ~1035 | 240 + SW | Interrupts on core 1 masked per batch, fast software scan (35 kH/s), hash loops pinned in memory, Wi-Fi wave errors shown separately |
@@ -37,7 +38,19 @@ There are intentionally no prebuilt firmware files: you flash what you can read 
 
 ---
 
-## New in 1.3.1.001 (pre-release, testing)
+## New in 1.3.1.002 (pre-release)
+
+- **Firmware update in the web UI:** settings → *Firmware update* → choose `firmware.bin` → *Upload & install*.
+  Mining pauses during the upload (~11 s for 1.2 MB), then the miner restarts. The file is checked first: it must be an
+  ESP32 image **and** carry this board's tag (`FW_BOARD_TAG` in config.h) – a firmware for another board is rejected.
+  Measured on the same board: **1034.2 kH/s with vs. 1034.5 without** the update feature (noise) – it costs nothing while idle.
+  Needs two app slots (`min_spiffs.csv`): **switch once by USB** (`pio run -t upload`), settings are kept. After that, updates work over Wi-Fi.
+  ⚠️ No password yet: anyone in your Wi-Fi could upload a firmware. Use it in your own network only.
+- **Restart counter only for real aborts:** "Save & restart", a firmware update or a console restart start from 0 (no `↻`).
+  Watchdog, crash and Wi-Fi watchdog restarts keep uptime, best difficulty and blocks as before.
+- **"💾 Save Wi-Fi 2"** (or Enter in the field): saves Wi-Fi 2 without a restart.
+
+## New in 1.3.1.001 (pre-release)
 
 Same hash loops as 1.3.1 (checked: identical addresses in memory, ~1035 kH/s), new comfort features
 taken over from the [Micro-USB / Ghost Pod project](https://github.com/brenner23/ESPressMiner32-MicroUSB-GhostPod) (1.1.1.003):
@@ -67,7 +80,7 @@ taken over from the [Micro-USB / Ghost Pod project](https://github.com/brenner23
 
 ## Display version (branch `display`, test stage)
 
-**Since 1.3.1-d8** the display version has the same new features as 1.3.1.001 (restart handover, Wi-Fi 2, swap buttons, quick setup).
+**Since 1.3.1-d9** the display version has the same features as 1.3.1.002 (restart handover, Wi-Fi 2, swap buttons, quick setup, **firmware update in the web UI** with its own board tag per display type).
 
 Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a dashboard on two cheap boards:
 

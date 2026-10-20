@@ -144,6 +144,7 @@ border-radius:8px;padding:9px 10px;font-size:14px}
     <select id="ssidsel2" class="ssidsel" style="display:none" onchange="if(this.value)$('c_ssid2').value=this.value"></select>
    </div>
    <div class="fld"><label for="c_wpass2">Wi-Fi password</label><input id="c_wpass2" type="password" maxlength="64"></div>
+   <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="saveWifi2()" title="Save Wi-Fi 2 only - no restart (Enter in the fields does the same)">&#128190; Save Wi-Fi 2</button> <span class="msg" id="w2msg"></span></div>
    <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="swapWifi()" title="Wi-Fi 2 becomes Wi-Fi 1 and vice versa - saved permanently, connection stays">&#8645; Swap Wi-Fi 1 &amp; 2 (saved)</button></div>
   </div>
   <div class="sec">
@@ -159,6 +160,11 @@ border-radius:8px;padding:9px 10px;font-size:14px}
    <div class="fld"><label for="p1user">Wallet address</label><input id="p1user"></div>
    <div class="fld"><label for="p1pass">Pool password</label><input id="p1pass"></div>
    <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="switchPool()" title="Swap Primary and Secondary Pool - saved permanently, no restart">&#8645; Swap pools (saved)</button></div>
+  </div>
+  <div class="sec" id="updsec">
+   <div class="sec-h">Firmware update</div>
+   <div class="fld"><label for="c_fw">Firmware file (.bin from PlatformIO: .pio/build/esp32dev/firmware.bin). Mining pauses during the upload, then the miner restarts.</label><input id="c_fw" type="file" accept=".bin"></div>
+   <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="uploadFw()">&#11014; Upload &amp; install</button> <span class="msg" id="fwmsg"></span></div>
   </div>
   <div class="sec">
    <div class="sec-h">Pool switching</div>
@@ -264,6 +270,17 @@ function fold(bits){const S=[...document.querySelectorAll('#ov .sec')];
  S.forEach((k,i)=>{const o=bits==0xFFFF?(i<2||i==3):(bits>>i)&1;k.classList.toggle('zu',!o);
   k.firstElementChild.onclick=()=>{k.classList.toggle('zu');if(portal)return;let b=0;S.forEach((x,j)=>{if(!x.classList.contains('zu'))b|=1<<j});
    fetch('/api/fold?b='+b,{method:'POST'}).catch(()=>{})}})}
+async function saveWifi2(){if(portal){$('w2msg').textContent='in the setup portal: use Save & restart';return}
+ $('w2msg').textContent='saving ...';
+ try{const r=await fetch('/api/wifi2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({wifiSsid2:$('c_ssid2').value.trim(),wifiPass2:$('c_wpass2').value})});
+  $('w2msg').textContent=(r.ok?'✔ ':'')+await r.text()}catch(e){$('w2msg').textContent='failed'}}
+['c_ssid2','c_wpass2'].forEach(i=>{const e=$(i);if(e)e.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();saveWifi2()}})});
+function uploadFw(){const f=$('c_fw').files[0];if(!f){$('fwmsg').textContent='choose a .bin file first';return}
+ if(!confirm('Install '+f.name+' ('+(f.size/1024).toFixed(0)+' KB)?\nMining pauses, then the miner restarts.'))return;
+ const fd=new FormData();fd.append('firmware',f,f.name);const x=new XMLHttpRequest();
+ x.upload.onprogress=e=>{if(e.lengthComputable)$('fwmsg').textContent='uploading '+Math.round(e.loaded*100/e.total)+' %'};
+ x.onload=()=>{$('fwmsg').textContent=x.responseText;if(x.status==200){setTimeout(()=>location.reload(),15000)}};
+ x.onerror=()=>{$('fwmsg').textContent='upload failed'};x.open('POST','/api/update');x.send(fd)}
 async function swapWifi(){if(portal||!$('c_ssid2').value.trim()){alert('Enter and save Wi-Fi 2 first');return}
  if(!confirm('Swap Wi-Fi 1 and Wi-Fi 2 permanently?\nSaved right away, the current connection stays.'))return;
  try{const r=await fetch('/api/swapwifi',{method:'POST'});const t=await r.text();if(!r.ok){alert(t);return}}catch(e){}
