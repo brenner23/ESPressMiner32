@@ -10,7 +10,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.1-d7"   // D7: Temperatur alle 5 s + Median (Ausreisser), Drosselung 105/115/95 statt 90/100/80. D6: Schrift Archivo Narrow Bold (OFL, darf ins Repo) statt Liberation Narrow. D5: Netz-Difficulty (quer 3 Blasen, hochkant eigene Zeile, NM-TV Labelzeile), Best Diff max 4 Nachkomma. D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
+#define MINER_VERSION     "1.3.1-d8"   // D8: Unterbau aus main 1.3.1.001 (Neustart-Uebergabe, Wi-Fi 2, Tausch-Knoepfe gespeichert, Schnell-Setup, Klapp-Abschnitte). D7: Temperatur alle 5 s + Median (Ausreisser), Drosselung 105/115/95 statt 90/100/80. D6: Schrift Archivo Narrow Bold (OFL, darf ins Repo) statt Liberation Narrow. D5: Netz-Difficulty (quer 3 Blasen, hochkant eigene Zeile, NM-TV Labelzeile), Best Diff max 4 Nachkomma. D4: CYD (quer/hochkant, Drehung, LDR). D3: Display-Einstellungen im Web (Design, Tag/Nacht-Helligkeit, Nachtzeiten). D2 + Schriften (Liberation Narrow Bold, Groessen wie Duino-Vorlage). D2: Startbalken + Dashboard, nur geaenderte Felder (D1 = 1034 kH/s wie 1.3.1)
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
@@ -124,6 +124,8 @@
 #define WIFI_RECONNECT_EVERY_MS  20000UL
 // ... und hilft das nicht, startet der Miner neu.
 #define WIFI_REBOOT_AFTER_MS     (3UL * 60UL * 1000UL)
+// ab .003: auf WLAN 2 so oft nachsehen, ob WLAN 1 wieder da ist (wie Pool: 10 min)
+#define WIFI2_RETRY_PRIMARY_MS   (10UL * 60UL * 1000UL)
 
 // Schutzfenster (ab 1.3.0.008): Ein Geraet im Netz (Mesh/Router) stoert den ESP alle
 // ~600 s fuer einen Augenblick (4-8 HW-Fehler auf einen Schlag). Der Miner lernt diesen
@@ -148,6 +150,11 @@
 // Display (ab 1.3.1-d2): so oft prueft der Dashboard-Task, ob sich Werte geaendert haben (nur diese werden gezeichnet)
 #ifndef DISPLAY_UPDATE_MS
 #define DISPLAY_UPDATE_MS        5000
+#endif
+
+// BOOT-Taste 5 s halten = Einstellungen loeschen (0 = aus)
+#ifndef BOOT_RESET_ENABLE
+#define BOOT_RESET_ENABLE        1
 #endif
 
 // Blaue Onboard-LED: leuchtet, solange gemint wird; kurz aus bei jedem Share. -1 = aus

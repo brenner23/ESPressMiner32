@@ -1,5 +1,6 @@
 #include "stratum_client.h"
 #include "config.h"
+#include <utility>
 #include "mining_job.h"
 #include "sha256_sw.h"
 #include "stats.h"
@@ -25,6 +26,8 @@ static const uint32_t SECONDARY_RETRY_PRIMARY = 10UL * 60UL * 1000UL;
 // Manueller Pool-Wechsel (vom Webserver angefordert)
 static volatile bool s_switchRequest = false;
 void stratum_request_switch() { s_switchRequest = true; }
+static volatile bool s_swapRequest = false;
+void stratum_request_swap() { s_swapRequest = true; }
 
 void StratumClient::begin()
 {
@@ -237,8 +240,8 @@ void StratumClient::buildAndPublishJob()
 {
     if (!_notify.valid) return;
 
-    // extranonce2 (Big-Endian Zaehler, links mit Nullen aufgefuellt)
     uint8_t en2[16] = {};
+    // extranonce2 (Big-Endian Zaehler, links mit Nullen aufgefuellt)
     uint32_t ctr = _en2Counter++;
     for (int i = 0; i < 4 && i < _en2Size; i++) en2[_en2Size - 1 - i] = (uint8_t)(ctr >> (8 * i));
     char en2Hex[40];
@@ -326,6 +329,13 @@ void StratumClient::run()
     uint32_t lastAttempt = 0;
 
     for (;;) {
+        // Schnell-Setup (ab .003): noch kein Pool eingetragen -> nur WLAN + Dashboard, nicht minen
+        if (!poolConfigured(0) && !poolConfigured(1)) {
+            if (_client.connected()) disconnect("no pool configured");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+
         // Manueller Wechsel auf den anderen konfigurierten Pool
         if (s_switchRequest) {
             s_switchRequest = false;
@@ -333,6 +343,20 @@ void StratumClient::run()
             if (poolConfigured(other)) {
                 disconnect("pool switched manually");
                 selectPool(other);
+            }
+        }
+
+        // Dauerhafter Tausch Primary <-> Secondary (Knopf "Swap pools"): speichern, ohne Neustart weiter
+        if (s_swapRequest) {
+            s_swapRequest = false;
+            if (poolConfigured(1)) {
+                Settings s = g_settings;
+                std::swap(s.pools[0], s.pools[1]);
+                if (settings_save(s)) {
+                    Serial.printf("[Stratum] Pools swapped and saved - new primary: %s\n", g_settings.pools[0].url.c_str());
+                    disconnect("pools swapped");
+                    selectPool(0);
+                }
             }
         }
 

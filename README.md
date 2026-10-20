@@ -22,6 +22,7 @@ Night run 9.6 h: average **1033.7 kH/s**, never below 1032, **0 restarts, 851/85
 
 | Version | kH/s | Cycles/hash | What's new |
 |---|---|---|---|
+| 1.3.1.001 (pre-release) | ~1035 | 240 + SW | Restart handover, Wi-Fi 2, swap buttons (saved), quick setup, collapsible settings – hash loops unchanged |
 | **1.3.1** (current, tested) | **~1034** | 240 + SW | = pre4 after a 9.6 h night run; dashboard shows only loop errors (`SHOW_WAVE_ERRORS`) |
 | 1.3.0.011-pre4 (pre-release) | ~1035 | 240 + SW | Interrupts on core 1 masked per batch, fast software scan (35 kH/s), hash loops pinned in memory, Wi-Fi wave errors shown separately |
 | 1.3.0.009 | ~1024 | 240 + SW | Loop "O" (240 cycles), Wi-Fi watchdog, guard window against periodic Wi-Fi disturbance, overheat protection, English UI |
@@ -36,17 +37,37 @@ There are intentionally no prebuilt firmware files: you flash what you can read 
 
 ---
 
+## New in 1.3.1.001 (pre-release, testing)
+
+Same hash loops as 1.3.1 (checked: identical addresses in memory, ~1035 kH/s), new comfort features
+taken over from the [Micro-USB / Ghost Pod project](https://github.com/brenner23/ESPressMiner32-MicroUSB-GhostPod) (1.1.1.003):
+
+- **Uptime survives a restart:** after a restart *without* power loss (Wi-Fi watchdog, crash, saving the settings)
+  uptime, best difficulty and found blocks continue; shares start at 0. After a power cut everything starts at 0 –
+  so the uptime tells you whether the device ran the whole time. Dashboard: `↻1` = one restart since power-on.
+- **Second Wi-Fi (optional):** tried whenever Wi-Fi 1 is not reachable (at boot, when the connection drops, while the
+  portal is open). On Wi-Fi 2 the miner checks every 10 min whether Wi-Fi 1 is back and returns to it.
+- **Swap buttons, saved permanently, no restart:** "⇅ Swap Wi-Fi 1 & 2" and "⇅ Swap pools" (in the settings and on the
+  dashboard). The old dashboard "Switch" only switched until the next restart.
+- **Quick setup:** in the setup portal the Wi-Fi is enough – pool and wallet can be entered later on the PC.
+- **Collapsible settings** (General · Wi-Fi 1 · Wi-Fi 2 · Primary · Secondary · Pool switching); the miner remembers
+  which sections are open, so phone and PC look the same.
+
 ## Features
 
 - **~1034 kH/s (over 1 MH/s)** on a classic ESP32 (hardware SHA pipeline on core 1 + software miner on core 0)
 - **Self-test** at boot (genesis block, 2000 random headers, 5000 nonces). If it fails, the miner does not mine.
 - **Every hit is re-checked in software** before a share is sent to the pool
 - **Web dashboard** at `http://espressminer.local/` with hashrate history, JSON at `/api/stats`
-- **Primary and secondary pool** with automatic failover
+- **Primary and secondary pool** with automatic failover (back to the primary after 10 min), **⇅ Swap pools** button (saved, no restart)
+- **Optional second Wi-Fi** with return to Wi-Fi 1 every 10 min
+- **Restart handover:** uptime, best difficulty and blocks continue across restarts without power loss
 - **Setup without coding:** Wi-Fi portal, GUI setup tool or command line
 - **Blue LED (GPIO2)** is on while mining and blinks on every share
 
 ## Display version (branch `display`, test stage)
+
+**Since 1.3.1-d8** the display version has the same new features as 1.3.1.001 (restart handover, Wi-Fi 2, swap buttons, quick setup).
 
 Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a dashboard on two cheap boards:
 
@@ -88,6 +109,7 @@ ESPressMiner32/
 │   ├── sha256_hw.h           Hardware SHA pipeline
 │   ├── sha256_sw.h           Software SHA-256 (coinbase, merkle, verification)
 │   ├── stratum_client.h      Stratum V1 client
+│   ├── handover.h            Values that survive a restart (RTC memory)
 │   ├── mining_job.h          Job/share exchange between tasks
 │   └── ...
 ├── src/                      Implementations + main.cpp

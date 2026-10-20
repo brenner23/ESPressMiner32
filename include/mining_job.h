@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include "config.h"
 
 struct MiningJob {
     uint32_t generation;      // steigt bei jedem neuen Job

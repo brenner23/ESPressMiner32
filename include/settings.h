@@ -17,6 +17,8 @@ struct Settings {
     String     hostname;   // Netzwerkname (mDNS)
     String     wifiSsid;
     String     wifiPass;
+    String     wifiSsid2;  // ab .003: zweites WLAN (optional, leer = keins), wird mitgeprueft wenn WLAN 1 fehlt
+    String     wifiPass2;
     PoolConfig pools[2];   // [0] = Primary, [1] = Secondary
     uint16_t   poolAltMin; // 0 = Failover (Standard), sonst: alle N Minuten Pool wechseln
 };
@@ -28,6 +30,9 @@ bool        settings_load();
 bool        settings_configured();
 bool        settings_save(const Settings& s);
 void        settings_clear();
+// Auf-/Zuklapp-Zustand der Abschnitte in den Settings (Bit i = Abschnitt i offen, 0xFFFF = Standard)
+uint16_t    settings_fold();
+void        settings_save_fold(uint16_t bits);
 
 // Uebernimmt Felder aus JSON (Format wie /api/config). Ein leeres "wifiPass"
 // laesst das bisherige Passwort unveraendert.

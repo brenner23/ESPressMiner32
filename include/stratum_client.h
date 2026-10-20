@@ -6,6 +6,8 @@
 
 // Manuellen Pool-Wechsel anfordern (thread-sicher, vom Webserver aufgerufen)
 void stratum_request_switch();
+// Primary und Secondary dauerhaft tauschen (speichern + sofort mit dem neuen Primary verbinden)
+void stratum_request_swap();
 
 class StratumClient {
 public:
