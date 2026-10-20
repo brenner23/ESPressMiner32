@@ -9,7 +9,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.1.001"   // aus Micro-USB 1.1.1.003: Neustart-Uebergabe, Pool-/WLAN-Tausch gespeichert, Wi-Fi 2, Schnell-Setup, Klapp-Abschnitte. Mining-Code = 1.3.1
+#define MINER_VERSION     "1.3.1.002-test"   // TEST: Firmware-Upload im Web (Mining pausiert), Neustart durch Nutzer ohne Uebergabe, Wi-Fi 2 speichern ohne Neustart. Davor 1.3.1.001: aus Micro-USB 1.1.1.003: Neustart-Uebergabe, Pool-/WLAN-Tausch gespeichert, Wi-Fi 2, Schnell-Setup, Klapp-Abschnitte. Mining-Code = 1.3.1
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 
@@ -139,6 +139,13 @@
 #define HW_GUARD_PROBE_EVERY     6        // jedes 6. Fenster ungeschuetzt (Stichprobe: Welle noch da?)
 #endif
 #endif
+
+// Firmware-Upload ueber die Weboberflaeche (ab 1.3.1.002-test). Braucht zwei App-Bereiche
+// (platformio.ini: min_spiffs.csv). Die Datei muss die Kennung FW_BOARD_TAG enthalten (falsches Board -> abgelehnt).
+#ifndef WEB_UPDATE_ENABLE
+#define WEB_UPDATE_ENABLE        1
+#endif
+#define FW_BOARD_TAG             "ESPM32-BOARD:usbc-devkit"
 
 // BOOT-Taste 5 s halten = Einstellungen loeschen (0 = aus)
 #ifndef BOOT_RESET_ENABLE

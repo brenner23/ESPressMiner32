@@ -21,6 +21,7 @@ static const uint32_t MAGIC = 0x48414E44;   // "HAND"
 static RTC_NOINIT_ATTR Data s_rtc;
 static uint32_t s_offset = 0;
 static uint32_t s_restarts = 0;
+static volatile bool s_forget = false;
 
 static uint32_t calc_crc(const Data& d)
 {
@@ -45,8 +46,15 @@ void restore()
     s_rtc.magic = 0;   // gelesen -> loeschen (save() legt die Werte danach neu ab)
 }
 
+void forget()
+{
+    s_forget = true;     // save() schreibt danach nichts mehr
+    s_rtc.magic = 0;
+}
+
 void save(uint32_t uptimeS)
 {
+    if (s_forget) return;
     Data d;
     d.magic    = MAGIC;
     d.uptimeS  = uptimeS;

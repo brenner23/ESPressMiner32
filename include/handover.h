@@ -16,6 +16,9 @@ namespace handover {
 void restore();
 // Jede Sekunde vom Statistik-Task: aktuelle Werte ablegen (nur RAM)
 void save(uint32_t uptimeS);
+// Ab 1.3.1.002: Neustart, den der Nutzer ausloest (Speichern & Neustart, Update, Konsole):
+// nichts uebergeben - danach beginnt alles bei 0. Nur Abbrueche (Watchdog, Absturz, WLAN-Waechter) zaehlen.
+void forget();
 
 uint32_t uptime_offset();   // Betriebszeit vor dem letzten Neustart (s)
 uint32_t restarts();        // Neustarts seit der letzten Stromtrennung

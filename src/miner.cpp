@@ -276,8 +276,9 @@ static void mine_loop(ScanFn scan, bool isHw, uint32_t nonceStart, uint32_t nonc
             continue;
         }
 
-        // Ueberhitzungsschutz: SW-Miner ab Stufe 1, HW-Miner ab Stufe 2 pausieren
-        if (thermal::level() >= (isHw ? 2 : 1)) {
+        // Ueberhitzungsschutz: SW-Miner ab Stufe 1, HW-Miner ab Stufe 2 pausieren;
+        // ab 1.3.1.002 auch waehrend eines Firmware-Uploads (miner::g_paused)
+        if (miner::g_paused || thermal::level() >= (isHw ? 2 : 1)) {
             vTaskDelay(pdMS_TO_TICKS(500));
             lastYield = millis();
             continue;
@@ -329,3 +330,5 @@ void sw_task(void*)
 }
 
 }  // namespace miner
+
+namespace miner { volatile bool g_paused = false; }

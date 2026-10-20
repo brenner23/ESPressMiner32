@@ -4,6 +4,7 @@
 namespace miner {
     void hw_task(void* arg);   // Hardware-SHA-Miner (Core 1)
     void sw_task(void* arg);   // Software-SHA-Miner (Core 0)
+    extern volatile bool g_paused;   // ab 1.3.1.002: true = beide Miner warten (z. B. Firmware-Upload)
 }
 
 // Ueberhitzungsschutz (Grenzwerte in config.h: TEMP_*)

@@ -1,6 +1,7 @@
 #include "serial_config.h"
 #include "config.h"
 #include "settings.h"
+#include "handover.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -27,6 +28,7 @@ static void reply_error(const char* msg)
 
 static void restart_soon()
 {
+    handover::forget();      // vom Nutzer gewollt -> kein Neustart-Zaehler
     Serial.flush();
     vTaskDelay(pdMS_TO_TICKS(300));
     ESP.restart();
