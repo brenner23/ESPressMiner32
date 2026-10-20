@@ -2,6 +2,14 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1.002 – Master 005 (2026-10-20) – Vorabversion, Firmware-Update im Web
+- **Firmware-Upload** in den Einstellungen (`/api/update`): Mining pausiert (`miner::g_paused`), Pruefung ESP-Image (0xE9)
+  + Board-Kennung `FW_BOARD_TAG` ("ESPM32-BOARD:usbc-devkit"), sonst abgelehnt; danach Neustart. Partitionen `min_spiffs.csv`
+  (2 x 1,9 MB, NVS unveraendert) -> einmal per USB. Gemessen .62: 1034,2 mit / 1034,5 ohne (Rauschen), hw_* gleiche Adressen.
+  Update 1,19 MB in 10,8 s. Noch kein Passwortschutz.
+- **Neustart durch den Nutzer** (Save & restart, Update, Konsole) -> `handover::forget()`: keine Uebergabe, kein Zaehler.
+- **„Save Wi-Fi 2“** (`/api/wifi2`, auch Enter im Feld): speichert WLAN 2 ohne Neustart.
+
 ## v1.3.1.001 – Master 005 (2026-10-20) – Vorabversion, Funktionen aus Micro-USB 1.1.1.003
 - Uebernommen aus brenner23/ESPressMiner32-MicroUSB-GhostPod (Stand 1.1.1.003), ohne die Ghost-Pod-Teile:
 - **Neustart-Uebergabe** (`handover.cpp`, RTC-Speicher): Betriebszeit, Best Diff, Blocks laufen bei Neustart ohne

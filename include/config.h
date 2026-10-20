@@ -9,7 +9,7 @@
 #elif DIAG_NET
 #define MINER_VERSION     "1.3.0.009-diag"   // Test-Build: Netz-Diagnose /api/diag (10-Minuten-Fehlerschub)
 #else
-#define MINER_VERSION     "1.3.1.002-test"   // TEST: Firmware-Upload im Web (Mining pausiert), Neustart durch Nutzer ohne Uebergabe, Wi-Fi 2 speichern ohne Neustart. Davor 1.3.1.001: aus Micro-USB 1.1.1.003: Neustart-Uebergabe, Pool-/WLAN-Tausch gespeichert, Wi-Fi 2, Schnell-Setup, Klapp-Abschnitte. Mining-Code = 1.3.1
+#define MINER_VERSION     "1.3.1.002"   // Firmware-Upload im Web (Mining pausiert), Neustart durch Nutzer ohne Uebergabe, Wi-Fi 2 speichern ohne Neustart. Davor 1.3.1.001: aus Micro-USB 1.1.1.003: Neustart-Uebergabe, Pool-/WLAN-Tausch gespeichert, Wi-Fi 2, Schnell-Setup, Klapp-Abschnitte. Mining-Code = 1.3.1
 #endif
 #define MINER_REPO_URL    "https://github.com/brenner23/ESPressMiner32"
 

@@ -146,7 +146,7 @@ border-radius:8px;padding:9px 10px;font-size:14px}
    <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="switchPool()" title="Swap Primary and Secondary Pool - saved permanently, no restart">&#8645; Swap pools (saved)</button></div>
   </div>
   <div class="sec" id="updsec">
-   <div class="sec-h">Firmware update (test)</div>
+   <div class="sec-h">Firmware update</div>
    <div class="fld"><label for="c_fw">Firmware file (.bin from PlatformIO: .pio/build/esp32dev/firmware.bin). Mining pauses during the upload, then the miner restarts.</label><input id="c_fw" type="file" accept=".bin"></div>
    <div style="text-align:center;margin-top:10px"><button type="button" class="swbtn" onclick="uploadFw()">&#11014; Upload &amp; install</button> <span class="msg" id="fwmsg"></span></div>
   </div>
