@@ -117,6 +117,13 @@ Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a 
   "Calibrate touch" in the web UI (hold a finger 5 s). Short measuring time, so the software miner keeps its speed.
 - **Highest difficulty kept** (since d10, switch in Settings → Statistics, ✕ resets it): saved in flash only when a
   new record arrives, so it survives power loss and firmware updates. **Operating time (total)** in the web UI.
+- **Picture pages** (since d11, tab **Pictures** in the web UI): up to 10 image URLs, each one is a page when you tap
+  the display (Dashboard → Clock → Picture 1 …). Format 240×240 RGB565 big-endian (CYD landscape also 320×240), http:// only.
+  **Only the picture on screen is loaded** (every N s, default 60) – measured cost about 0.1–0.4 kH/s, no extra hardware errors.
+  Optional overlay: hashrate + blocks in black boxes in the top corners (NM-TV), on the CYD with a 240 picture the side
+  margins show hashrate, blocks, time and best difficulty. Errors in plain text ("Image error / Image not found (wrong URL?)").
+- **Wi-Fi takeover** (since d11): on the first start after switching from another firmware (MiniTV, NerdMiner …) the miner
+  uses the Wi-Fi the ESP32 had stored – no setup portal needed. The password never leaves the chip.
 - Fonts **Archivo Narrow Bold** and **DSEG7/DSEG14** (SIL Open Font License) are **included** – just build and flash, see [include/fonts/README.md](include/fonts/README.md).
 
 ## Project layout

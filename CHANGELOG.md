@@ -2,6 +2,17 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1-d11 – Display-Version, Branch `display` (2026-11-17)
+- **Bild-Seiten** (Reiter „Pictures“): bis 10 URLs, Tippen blaettert Dashboard → Uhr → Bild 1..n. Logik aus MiniTV
+  `view_picture.h` (Groessenpruefung 240/320, PNG-Hinweis, Cache-Buster, zeilenweise auf SPI, 2 stille Wiederholungen),
+  Abruf per WiFiClient (IRAM). Nur das angezeigte Bild laedt (picSec, Standard 60 s). Bild-Seiten in echtem Schwarz.
+- **Overlay** (Haken): NM-TV schwarze Kaesten kH/s + Bloecke in den oberen Ecken (Bloecke-Kasten so breit wie die Zahl);
+  CYD quer + 240er-Bild: 4 Werte im Rand (kH/s, Bloecke, Uhrzeit, Best), CYD + Vollbild: kleine DSEG7-Ecken.
+- **Bildfehler im Klartext** wie MiniTV v5.0013 („Image error“, zwei Zeilen, graue Technikzeile mit Code/Server/retry).
+- **WLAN-Uebernahme** beim ersten Start von einer anderen Firmware (esp_wifi_get_config) – .37 von MiniTV umgestellt.
+- Fixes: WiFiClient-Timeout in Millisekunden (Dollarkurs + Bilder kamen in d10 nie an), Bild-URLs vor dem Webserver laden.
+- Gemessen: 20 min .45 mit Bild-Seite 8 Fehler (nur Fritzbox-Welle) vs .38 9 / .46 10; 6 Geraete 1033–1034 kH/s; hw_* wie d9.
+
 ## v1.3.1-d10 – Display-Version, Branch `display` (2026-11-17)
 - **Uhr-Seite**: Umschalten per Touch (NM-TV Pin 32 / CYD Touchscreen), BOOT kurz oder Web („Screen: Dashboard | Clock“).
   Uhrzeit DSEG7 (Ziffern gleich breit, springt nicht), Datum DSEG14+DSEG7, oben links kH/s, oben rechts Bloecke oder

@@ -934,14 +934,15 @@ static void input_tick()
 // Geladen wird NUR das gerade angezeigte Bild, alle picSec Sekunden (Standard 60) - sonst kein Abruf, kein Verlust.
 // Abruf per WiFiClient statt HTTPClient (IRAM randvoll, siehe Dollarkurs).
 static const int PIC_MAX = 10;
+static const uint16_t PIC_BLACK = 0x0000;              // Bild-Seiten: echtes Schwarz wie der Bildrand (User: Design-Hintergrund war grau)
 static String   s_picUrl[PIC_MAX];
 static uint16_t s_picSec = 60;
 static bool     s_picOv  = false;                      // Overlay kH/s + Bloecke oben auf den Bildern (User)
-static char     s_ovLast[24] = "";
+static char     s_ovLast[48] = "";
 static uint32_t s_picNext = 0;
 static uint8_t  s_picRetries = 0;
 static bool     s_picWide = false;
-static char     s_picMsg[72] = "";
+static char     s_picMsg[96] = "";
 
 static void pics_load()
 {
@@ -975,20 +976,50 @@ static int pic_count() { int n = 0; for (int i = 0; i < PIC_MAX; i++) if (s_picU
 
 static void pic_msg(const char* m) { strlcpy(s_picMsg, m, sizeof(s_picMsg)); Serial.printf("[PIC] %s\n", m); }
 
-// Fehler: Text unten auf schwarzem Band, altes Bild bleibt sonst stehen (MiniTV zeigte eine ganze Fehlerseite)
-static void pic_error(const char* m)
+// Fehler im Klartext wie MiniTV Hybrid v5.0013 (include/view_picture.h _picHttpText / showError, Uebergabe 17.11.):
+// rote Ueberschrift "Image error", zwei Zeilen (max. 16 Zeichen), kleine graue Technikzeile (Code, Server, retry).
+// Gleicher Text im Web (picMsg). Codes wie HTTPClient (-1 refused ... -11 timeout) + HTTP-Status.
+static void pic_http_text(int code, const char*& a, const char*& b)
 {
-    pic_msg(m);
-    tft.fillRect(0, s_h - 18, s_w, 18, C_BG);
-    tft.setFont(nullptr); tft.setTextSize(1); tft.setTextColor(C_BAD, C_BG);
-    tft.setCursor(4, s_h - 13); tft.print(m);
+    switch (code) {
+        case -1:  a = "Server refused";  b = "connection";       break;
+        case -2:  a = "Request not";     b = "sent";             break;
+        case -4:  a = "Not connected";   b = "to server";        break;
+        case -5:  a = "Connection lost"; b = "during transfer";  break;
+        case -7:  a = "No web server";   b = "at this address";  break;
+        case -11: a = "Server did not";  b = "answer (timeout)"; break;
+        case 401: a = "Access denied";   b = "(login needed)";   break;
+        case 403: a = "Access denied";   b = "(forbidden)";      break;
+        case 404: a = "Image not found"; b = "(wrong URL?)";     break;
+        case 500: a = "Server script";   b = "error";            break;
+        case 502: case 503: case 504:
+                  a = "Server busy";     b = "or offline";       break;
+        default:  a = "Unexpected";      b = "server answer";    break;
+    }
 }
+
+static void pic_fail(const char* a, const char* b, const String& small)
+{
+    snprintf(s_picMsg, sizeof(s_picMsg), "%s %s (%s)", a, b, small.c_str());
+    Serial.printf("[PIC] %s\n", s_picMsg);
+    tft.fillScreen(PIC_BLACK);
+    s_ovLast[0] = 0;                                  // Overlay danach neu
+    const int16_t cx = s_w / 2, oy = (s_h - 240) / 2;
+    put("Image error", &ArchivoNB14pt7b, cx - gfx_width("Image error", &ArchivoNB14pt7b) / 2, oy + 92, C_BAD);
+    if (a && *a) put(a, &ArchivoNB12pt7b, cx - gfx_width(a, &ArchivoNB12pt7b) / 2, oy + 128, 0xFFFF);
+    if (b && *b) put(b, &ArchivoNB12pt7b, cx - gfx_width(b, &ArchivoNB12pt7b) / 2, oy + 152, 0xFFFF);
+    tft.setFont(nullptr); tft.setTextSize(1); tft.setTextColor(0x94B2);   // grau (150,150,150)
+    tft.setCursor(max(0, cx - (int)small.length() * 3), oy + 180);
+    tft.print(small);
+}
+
+static String pic_retry() { return "retry " + String(s_picSec) + "s"; }
 
 static bool pic_fetch(int idx)
 {
-    if (WiFi.status() != WL_CONNECTED) { pic_error("no Wi-Fi"); return false; }
+    if (WiFi.status() != WL_CONNECTED) { pic_fail("WiFi lost", "reconnecting...", pic_retry()); return false; }
     String u = s_picUrl[idx];
-    if (!u.startsWith("http://")) { pic_error("only http:// URLs"); return false; }
+    if (!u.startsWith("http://")) { pic_fail("Only http://", "URLs possible", "no https on the miner"); return false; }
     // Cache-Buster wie MiniTV (?t= / &t=)
     const char last = u[u.length() - 1];
     u += (last == '?' || last == '&') ? "t=" : (u.indexOf('?') >= 0 ? "&t=" : "?t=");
@@ -1003,11 +1034,19 @@ static bool pic_fetch(int idx)
 
     WiFiClient c;
     c.setTimeout(6000);                                  // Millisekunden! (17.11.: 5 = 5 ms -> "no answer")
-    if (!c.connect(hp.c_str(), port, 4000)) { pic_error("server not reachable"); return false; }
+    if (!c.connect(hp.c_str(), port, 4000)) {
+        const char *a, *b; pic_http_text(-1, a, b);
+        pic_fail(a, b, "HTTP -1 " + hp.substring(0, 20) + " " + pic_retry()); return false;
+    }
     c.printf("GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: ESPressMiner32\r\nConnection: close\r\n\r\n", path.c_str(), hp.c_str());
     // Kopf lesen: Status, Content-Type, Content-Length
     String line = c.readStringUntil('\n');
-    if (line.indexOf(" 200") < 0) { c.stop(); line.trim(); pic_error(line.length() ? line.c_str() : "no answer"); return false; }
+    if (line.indexOf(" 200") < 0) {
+        c.stop(); line.trim();
+        const int code = line.length() ? line.substring(line.indexOf(' ') + 1).toInt() : -11;   // leer = keine Antwort
+        const char *a, *b; pic_http_text(code, a, b);
+        pic_fail(a, b, "HTTP " + String(code) + " " + hp.substring(0, 20) + " " + pic_retry()); return false;
+    }
     int len = -1; bool png = false;
     for (;;) {
         line = c.readStringUntil('\n');
@@ -1017,13 +1056,14 @@ static bool pic_fetch(int idx)
         if (l.startsWith("content-length:")) len = l.substring(15).toInt();
         if (l.startsWith("content-type:") && l.indexOf("png") >= 0) png = true;
     }
-    if (png) { c.stop(); pic_error("PNG instead of RAW: remove &png=1"); return false; }
+    if (png) { c.stop(); pic_fail("Got PNG, need", "RAW: drop &png", "remove &png=1 from the URL"); return false; }
     int w = 0;
     if (len == 240 * 240 * 2) w = 240;
     else if (len == s_w * 240 * 2 && s_w > 240 && s_h == 240) w = s_w;     // CYD quer: volle Breite
-    if (!w) { c.stop(); char m[48]; snprintf(m, sizeof(m), "size %d B (need 240x240 RGB565)", len); pic_error(m); return false; }
+    if (!w && len == 320 * 240 * 2) { c.stop(); pic_fail("320px image but", "display portrait", "use cyd=0 in the URL"); return false; }
+    if (!w) { c.stop(); pic_fail("Wrong image size", "need 240x240 RAW", String(len) + " bytes, expected 115200"); return false; }
     const int16_t x0 = (s_w - w) / 2, y0 = (s_h - 240) / 2;
-    if (w == 240 && (s_w > 240 || s_h > 240) && s_picWide) tft.fillScreen(C_BG);   // Reste eines 320er-Bildes
+    if (w == 240 && (s_w > 240 || s_h > 240) && s_picWide) tft.fillScreen(PIC_BLACK);   // Reste eines 320er-Bildes
     s_picWide = (w != 240);
     const int ROW = w * 2;
     uint8_t row[320 * 2];
@@ -1044,7 +1084,8 @@ static bool pic_fetch(int idx)
                 return false;
             }
             s_picRetries = 0;
-            char m[32]; snprintf(m, sizeof(m), "aborted at row %d", y); pic_error(m);
+            const char *a, *b; pic_http_text(-5, a, b);
+            pic_fail(a, b, "row " + String(y) + " " + hp.substring(0, 20) + " " + pic_retry());
             return false;
         }
         tft.startWrite();
@@ -1062,7 +1103,7 @@ static bool pic_fetch(int idx)
 static void draw_pic_frame()
 {
     s_bootFull = false;
-    tft.fillScreen(C_BG);
+    tft.fillScreen(PIC_BLACK);
     s_picWide = false;
     s_picNext = 0;                                       // sofort laden
 }
@@ -1070,9 +1111,59 @@ static void draw_pic_frame()
 // alle Sekunde aus dem Display-Task: nur die angezeigte Bild-Seite laedt
 // Overlay (User 17.11.): Bilder sind statisch -> oben zwei dunkle Kapseln mit kH/s und Bloecken, wie auf der Uhr.
 // Eigener Hintergrund: bei neuer Zahl nur die Kapsel neu, das Bild darunter bleibt.
+// CYD quer + 240er-Bild: Werte in den schwarzen Rand links/rechts (je 40 px), groesste Schrift, die passt (User 17.11.)
+static void margin_text(int16_t x0, int16_t mw, int16_t base, const char* t, uint16_t col, bool small = false)
+{
+    // User: schmaler Streifen -> hoechstens 10 pt (Werte) bzw. 8 pt (Beschriftung)
+    const GFXfont* f = small ? &ArchivoNB8pt7b : fit(t, mw - 4, { &ArchivoNB10pt7b, &ArchivoNB8pt7b });
+    put(t, f, x0 + (mw - gfx_width(t, f)) / 2, base, col);
+}
+
+static bool pic_margins(bool force)
+{
+    const int16_t mw = (s_w - 240) / 2;
+    if (!(s_w > s_h && !s_picWide && mw >= 30)) return false;      // nur quer mit 240er-Bild
+    char h[12], b[12], t[8], d[16], key[48];
+    snprintf(h, sizeof(h), "%lu", (unsigned long)g_stats.khCurrent);
+    snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.blocksFound);
+    time_t now = time(nullptr); struct tm tm; localtime_r(&now, &tm);
+    if (tm.tm_year >= 120) snprintf(t, sizeof(t), "%02d:%02d", tm.tm_hour, tm.tm_min); else strlcpy(t, "--:--", sizeof(t));
+    fmt_diff(g_stats.bestDiff, d, sizeof(d));
+    snprintf(key, sizeof(key), "M%s|%s|%s|%s", h, b, t, d);
+    if (!force && !strcmp(key, s_ovLast)) return true;
+    strlcpy(s_ovLast, key, sizeof(s_ovLast));
+    const int16_t rx = s_w - mw;
+    tft.fillRect(0, 0, mw, s_h, PIC_BLACK);
+    tft.fillRect(rx, 0, mw, s_h, PIC_BLACK);
+    margin_text(0, mw, 15, h, C_GREEN);           // ganz oben anfangen (User: keinen Platz verschwenden)           // links oben: kH/s (waagerecht; senkrecht war quer schlechter, User 17.11.)
+    margin_text(0, mw, 27, "kH/s", C_GREEN, true);
+    margin_text(rx, mw, 15, b, C_ACCENT);         // rechts oben: Bloecke
+    margin_text(rx, mw, 27, "blocks", C_ACCENT, true);
+    margin_text(0, mw, s_h - 14, t, C_TEXT);      // ganz unten      // links unten: Uhrzeit
+    margin_text(0, mw, s_h - 2, "time", C_MUTED, true);
+    margin_text(rx, mw, s_h - 14, d, C_BLUE);     // rechts unten: beste Difficulty
+    margin_text(rx, mw, s_h - 2, "best", C_MUTED, true);
+    return true;
+}
+
 static void pic_overlay(bool force)
 {
     if (!s_picOv) return;
+    if (pic_margins(force)) return;                // CYD quer: im Rand statt ueber dem Bild
+    if (s_w > 240 && s_picWide) {                  // breites Display + Vollbild: klein ganz in die Ecken (User: Sandhaufen)
+        char h[12], b[12], key[28];
+        snprintf(h, sizeof(h), "%lu", (unsigned long)g_stats.khCurrent);
+        snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.blocksFound);
+        snprintf(key, sizeof(key), "S%s|%s", h, b);
+        if (!force && !strcmp(key, s_ovLast)) return;
+        strlcpy(s_ovLast, key, sizeof(s_ovLast));
+        const int16_t wh = gfx_width(h, &DSEG7B9pt7b), wb = gfx_width(b, &DSEG7B9pt7b);
+        tft.fillRect(0, 0, wh + 6, 21, PIC_BLACK);
+        put(h, &DSEG7B9pt7b, 3, 18, C_GREEN);
+        tft.fillRect(s_w - wb - 6, 0, wb + 6, 21, PIC_BLACK);
+        put(b, &DSEG7B9pt7b, s_w - wb - 3, 18, C_ACCENT);
+        return;
+    }
     char h[12], b[12], key[24];
     snprintf(h, sizeof(h), "%lu", (unsigned long)g_stats.khCurrent);
     snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.blocksFound);
@@ -1081,14 +1172,17 @@ static void pic_overlay(bool force)
     strlcpy(s_ovLast, key, sizeof(s_ovLast));
     const int16_t wh = gfx_width(h, &DSEG7B12pt7b), wu = gfx_width("kH/s", &ArchivoNB8pt7b), wb = gfx_width(b, &DSEG7B12pt7b);
     const int16_t lw = 8 + wh + 4 + wu + 8;
-    tft.fillRect(0, 0, 116, 30, C_BG);                       // eckig, ganz in der Ecke 0,0 (User); feste Breite
+    tft.fillRect(0, 0, 116, 30, PIC_BLACK);                       // eckig, ganz in der Ecke 0,0 (User); feste Breite
     put(h, &DSEG7B12pt7b, 6, 25, C_GREEN);
     put("kH/s", &ArchivoNB8pt7b, 6 + wh + 4, 25, C_GREEN);
     (void)lw;
-    const int16_t bw = max<int16_t>(28, wb + 16);
-    tft.fillRect(s_w - 60, 0, 60, 30, C_BG);                 // oben rechts bündig
+    // rechts: Kasten nur so breit wie die Zahl (User: "noch keine 5000 Bloecke"); schmaler -> Bild einmal neu laden
+    static int16_t lastBw = 0;
+    const int16_t bw = wb + 12;
+    if (bw < lastBw && !force) { s_picNext = 0; s_ovLast[0] = 0; lastBw = 0; return; }
+    lastBw = bw;
+    tft.fillRect(s_w - bw, 0, bw, 30, PIC_BLACK);                 // oben rechts buendig
     put(b, &DSEG7B12pt7b, s_w - 6 - wb, 25, C_ACCENT);
-    (void)bw;
 }
 
 static void pic_tick()
