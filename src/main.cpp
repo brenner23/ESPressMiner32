@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "handover.h"
+#include "persist.h"
 #include "settings.h"
 #include "miner.h"
 #include "mining_job.h"
@@ -284,6 +285,7 @@ void setup()
     }
     Serial.println("==============================================");
     handover::restore();        // Neustart ohne Stromtrennung: Betriebszeit, Best Diff, Blocks weiter
+    persist::begin();           // d10: Best Diff ueber Stromausfall + Betriebszeit gesamt (NVS)
     Serial.printf("CPU %lu MHz, free heap %lu bytes\n",
                   (unsigned long)getCpuFrequencyMhz(), (unsigned long)ESP.getFreeHeap());
 

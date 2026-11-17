@@ -109,7 +109,15 @@ Same miner, same hash loops (**same ~1034 kH/s, no extra loop errors**), plus a 
 - **Chip temperature** (since d7): measured every 5 s, median of the last 7 values. Note: the ESP32's internal sensor
   differs from chip to chip by up to ~30 °C (three identical boards showed 34 / 49 / 64 °C at a cold start), so the
   overheat protection only starts at 105 °C (software miner paused) / 115 °C (mining stopped).
-- Font **Archivo Narrow Bold** (SIL Open Font License) is **included** – just build and flash, see [include/fonts/README.md](include/fonts/README.md).
+- **Clock screen** (since d10): tap the display (NM-TV touch pad, CYD touchscreen), tap BOOT, or choose it in the web UI.
+  Big 7-segment clock (DSEG7) over a dotted world map in the colour of the selected design, hashrate top left,
+  top right selectable: **blocks** or **dollar rate** (EUR→USD, from Exchange Rate API, every 6 h, fetched inside the
+  Wi-Fi guard window when one is learned), bottom: version and **IP address** or **pool name** (too long → "...").
+- **Touch** (NM-TV, pin 32): fires on release (60 ms – 3 s), self-adjusting rest value, threshold per case via
+  "Calibrate touch" in the web UI (hold a finger 5 s). Short measuring time, so the software miner keeps its speed.
+- **Highest difficulty kept** (since d10, switch in Settings → Statistics, ✕ resets it): saved in flash only when a
+  new record arrives, so it survives power loss and firmware updates. **Operating time (total)** in the web UI.
+- Fonts **Archivo Narrow Bold** and **DSEG7/DSEG14** (SIL Open Font License) are **included** – just build and flash, see [include/fonts/README.md](include/fonts/README.md).
 
 ## Project layout
 

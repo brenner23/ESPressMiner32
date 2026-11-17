@@ -5,6 +5,7 @@
 #include "mining_job.h"
 #include "utils.h"
 #include "handover.h"
+#include "persist.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -52,6 +53,7 @@ void stats_task(void*)
         g_stats.khAverage = avg;
         g_stats.uptimeS   = handover::uptime_offset() + (now - startMs) / 1000;   // laeuft ueber Neustarts weiter
         handover::save(g_stats.uptimeS);
+        persist::tick(g_stats.uptimeS);
         g_stats.totalHashes = totalHashes;
         g_stats.history[g_stats.historyHead] = khHw + khSw;
         g_stats.historyHead = (g_stats.historyHead + 1) % STATS_HISTORY_LEN;

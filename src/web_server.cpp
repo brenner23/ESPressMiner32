@@ -11,6 +11,7 @@ void wifi_note_swapped();   // main.cpp
 #include "mining_job.h"
 #include "stats.h"
 #include "web_page.h"
+#include "persist.h"
 #include "stratum_client.h"
 #include "diag.h"
 
@@ -55,6 +56,7 @@ static void handle_stats()
     doc["thermalLevel"]= thermal::level();
     if (g_variantBeforeReset >= 0) doc["variantBeforeReset"] = hw_sha_variant_name(g_variantBeforeReset);
     doc["bestDiff"]    = g_stats.bestDiff;
+    persist::to_json(doc);                     // d10: keepBest, savedBest, opSeconds
     doc["poolDiff"]    = jobs::difficulty();
     doc["netDiff"]     = g_stats.networkDiff;
     doc["blocks"]      = g_stats.blocksFound;
@@ -391,6 +393,12 @@ void web_task(void*)
         // vertauscht, gespeichert und der neue Primary sofort verbunden (erledigt der Stratum-Task)
         stratum_request_swap();
         s_server.send(200, "text/plain", "Pools swapped and saved");
+    });
+    s_server.on("/api/persist", HTTP_POST, [] {          // d10: {"keepBest":bool} {"resetBest":true} {"best":n}
+        JsonDocument j;
+        if (deserializeJson(j, s_server.arg("plain"))) { s_server.send(400, "text/plain", "Invalid JSON"); return; }
+        if (const char* err = persist::set(j)) { s_server.send(400, "text/plain", err); return; }
+        s_server.send(200, "text/plain", "Saved");
     });
 #if HAS_DISPLAY
     // ab 1.3.1-d3: Display-Einstellungen, wirken sofort (kein Neustart)

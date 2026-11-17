@@ -38,6 +38,21 @@ Included font (since v1.3.1-d6):
     bitmap conversions made with tools/ttf2gfx.py (freetype-py), same licence.
   Layout and font sizes follow the author's own Duino-Coin display projects.
 
+Included fonts for the clock screen (since v1.3.1-d10):
+  - DSEG7 Classic Bold / DSEG14 Classic Bold   SIL OFL 1.1   https://github.com/keshikan/DSEG
+    Copyright (c) 2017, keshikan (http://www.keshikan.net), with Reserved Font Name "DSEG".
+    TTF + licence text in tools/fonts/ (OFL-DSEG.txt). include/fonts/DSEG7B*pt7b.h and
+    DSEG14B9pt7b.h are bitmap conversions made with tools/ttf2gfx.py, same licence.
+
+Clock screen world map (since v1.3.1-d10):
+  - include/earth_mask.h is generated (dot grid, 1 bit per dot) with the Python package
+    global_land_mask (MIT, https://github.com/toddkarin/global-land-mask), which is based on
+    the GLOBE elevation data of NOAA (U.S. government data, public domain). No map image is included.
+
+Online service (optional, only if "Dollar" is selected on the clock screen):
+  - Exchange rates by Exchange Rate API (https://www.exchangerate-api.com), free open access
+    endpoint http://open.er-api.com/v6/latest/USD, fetched at most every 6 hours.
+
 Setup tools (tools/*.py) need:
   - pyserial                  BSD-3-Clause
 ```

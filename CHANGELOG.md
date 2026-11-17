@@ -2,6 +2,17 @@
 
 Messwerte: ESP32-D0WD-V3 (rev 3.1), 240 MHz, DevKit USB-C, eigener Stratum-Pool.
 
+## v1.3.1-d10 – Display-Version, Branch `display` (2026-11-17)
+- **Uhr-Seite**: Umschalten per Touch (NM-TV Pin 32 / CYD Touchscreen), BOOT kurz oder Web („Screen: Dashboard | Clock“).
+  Uhrzeit DSEG7 (Ziffern gleich breit, springt nicht), Datum DSEG14+DSEG7, oben links kH/s, oben rechts Bloecke oder
+  Dollarkurs (open.er-api.com, alle 6 h, im Schutzfenster der WLAN-Welle), unten Version und IP oder Pool („...“).
+  Hintergrund eigene Punkte-Erde (global_land_mask, 1 Bit je Punkt, eingefaerbt nach Design).
+- **Touch** nach MiniTV-Logik (Ausloesen beim Loslassen, Ruhewert nachgefuehrt), Kalibrierung im Web.
+  ESP-IDF statt touchRead (IRAM voll); kurze Messzeit 0,13 ms: Werkszeit kostete den SW-Miner 2 kH/s (33,0 statt 35,0).
+- **Best Difficulty dauerhaft** (NVS, Haken + ✕), **Betriebszeit gesamt** (alle 10 min gesichert) im Web.
+- Dollarkurs per WiFiClient statt HTTPClient (HTTPClient: IRAM +1,2 KB uebergelaufen).
+- Gemessen .45 (NM-TV): 1034,1 kH/s (HW 999,3 + SW 34,8) gegen d9 .46 1034,7; hw_*-Adressen identisch mit d9.
+
 ## v1.3.1-d9 – Display-Version, Branch `display` (2026-10-20)
 - Unterbau aus `main` 1.3.1.002: Firmware-Upload in der Weboberflaeche mit eigener Board-Kennung je Geraet
   (`ESPM32-BOARD:nmtv154` / `ESPM32-BOARD:cyd` / `ESPM32-BOARD:usbc-devkit`) – NM-TV-Firmware wird auf einem CYD abgelehnt

@@ -23,6 +23,7 @@ DisplayStats g_disp = {};
 #include "utils.h"
 #include <Preferences.h>
 #include <driver/ledc.h>
+#include <driver/touch_pad.h>
 #if !__has_include("fonts/ArchivoNB10pt7b.h")
 #error "Display fonts missing: see include/fonts/README.md"
 #endif
@@ -35,6 +36,15 @@ DisplayStats g_disp = {};
 #include "fonts/ArchivoNB17pt7b.h"
 #include "fonts/ArchivoNB18pt7b.h"
 #include "fonts/ArchivoNB20pt7b.h"
+#include "fonts/ArchivoNB8pt7b.h"
+#include "fonts/DSEG7B9pt7b.h"       // d10 Uhr-Seite: DSEG7/DSEG14 Classic Bold (keshikan, OFL)
+#include "fonts/DSEG7B12pt7b.h"
+#include "fonts/DSEG7B26pt7b.h"
+#include "fonts/DSEG14B9pt7b.h"
+#include "earth_mask.h"
+#include "persist.h"
+#include "sha256_hw.h"
+#include <ArduinoJson.h>
 
 #if defined(BOARD_CYD)
 static SPIClass s_spi(HSPI);                       // Vorlage CYD: eigener HSPI-Bus (main.cpp Z. 90)
@@ -64,6 +74,12 @@ static void apply_design(uint8_t d)
 
 // ---- Display-Einstellungen (ab 1.3.1-d3, NVS "espdisp") ---------------------------------------
 // NM-TV: Tag-/Nachthelligkeit nach Uhrzeit (PLAN.md "Festgelegt 16.10."). Aenderungen wirken sofort.
+// NM-TV-Touch an GPIO 32 (gemessen 17.11. an .45); CYD nutzt den Touchscreen-Meldepin
+#if defined(BOARD_CYD)
+#define TOUCH_DEFAULT -1
+#else
+#define TOUCH_DEFAULT 32
+#endif
 struct DispCfg {
     uint8_t  design;         // 0..2
     uint8_t  dayBri;         // 0..100 %
@@ -73,8 +89,13 @@ struct DispCfg {
     uint16_t nightTo;
     uint8_t  rotation;       // tft.setRotation-Index 0..3 (nur CYD)
     bool     autoLight;      // LDR (nur CYD): Regler = Minimum, Licht -> bis 100 %
+    uint8_t  page;           // d10: 0 Dashboard, 1 Uhr
+    uint8_t  ckRight;        // d10 Uhr oben rechts: 0 Bloecke, 1 Dollarkurs
+    uint8_t  ckBottom;       // d10 Uhr unten rechts: 0 IP, 1 Pool
+    int8_t   touchPin;       // d10 NM-TV: Touch-Pin (-1 = aus, sonst 27/32/33)
+    uint8_t  touchPct;       // d10: Schaltschwelle = Abfall in % vom Ruhewert (Kalibrierung je Gehaeuse)
 };
-static DispCfg s_cfg = { 1, 100, 20, false, 22 * 60, 7 * 60, TFT_ROTATION, false };
+static DispCfg s_cfg = { 1, 100, 20, false, 22 * 60, 7 * 60, TFT_ROTATION, false, 0, 0, 0, TOUCH_DEFAULT, 12 };
 static volatile bool     s_rotate     = false;   // Drehung geaendert -> neu aufbauen
 static int               s_ldrRaw     = -1;      // letzter LDR-Mittelwert (CYD)
 static volatile bool     s_redraw     = false;   // Design gewechselt -> Dashboard komplett neu
@@ -95,9 +116,18 @@ static void cfg_load()
         s_cfg.nightTo   = p.getUShort("nTo", 7 * 60);
         s_cfg.rotation  = p.getUChar("rot", TFT_ROTATION);
         s_cfg.autoLight = p.getBool("autoLight", false);
+        s_cfg.page      = p.getUChar("page", 0);
+        s_cfg.ckRight   = p.getUChar("ckR", 0);
+        s_cfg.ckBottom  = p.getUChar("ckB", 0);
+        s_cfg.touchPin  = p.getChar("tPin", TOUCH_DEFAULT);
+        s_cfg.touchPct  = p.getUChar("tPct", 12);   // MiniTV: TOUCH_DROP_PCT 12
         p.end();
     }
     if (s_cfg.design > 2) s_cfg.design = 1;
+    if (s_cfg.page > 1) s_cfg.page = 0;
+    if (s_cfg.ckRight > 1) s_cfg.ckRight = 0;
+    if (s_cfg.ckBottom > 1) s_cfg.ckBottom = 0;
+    if (s_cfg.touchPct < 3 || s_cfg.touchPct > 70) s_cfg.touchPct = 12;
     if (s_cfg.dayBri == 0) s_cfg.dayBri = 100;      // nie dunkel starten (wie Vorlage)
     if (s_cfg.dayBri > 100) s_cfg.dayBri = 100;
     if (s_cfg.nightBri > 100) s_cfg.nightBri = 100;
@@ -122,6 +152,11 @@ static void cfg_save()
     p.putUShort("nTo", s_cfg.nightTo);
     p.putUChar("rot", s_cfg.rotation);
     p.putBool("autoLight", s_cfg.autoLight);
+    p.putUChar("page", s_cfg.page);
+    p.putUChar("ckR", s_cfg.ckRight);
+    p.putUChar("ckB", s_cfg.ckBottom);
+    p.putChar("tPin", s_cfg.touchPin);
+    p.putUChar("tPct", s_cfg.touchPct);
     p.end();
 }
 
@@ -552,6 +587,311 @@ static int update_fields()
     return n;
 }
 
+// ---- Uhr-Seite (ab 1.3.1-d10) ---------------------------------------------------------------
+// Layout vom User abgenommen (Erde-Punkte/IDEE_Uhr-Erde-Bilder.md): oben links kH/s (DSEG7) + "kH/s" (Archivo),
+// oben rechts Bloecke oder Dollarkurs, Mitte Uhrzeit DSEG7 (Ziffern gleich breit -> springt nicht), Datum
+// DSEG14 (Wochentag) + DSEG7, unten Version (nur Ziffern) und IP oder Pool (Archivo, zu lang -> "...").
+// Hintergrund: eigene Punkte-Erde (global_land_mask), blass in der Stilfarbe.
+
+static uint16_t rgb565_mix(uint16_t a, uint16_t b, float k)
+{
+    const int ar = a >> 11, ag = (a >> 5) & 63, ab = a & 31, br = b >> 11, bg = (b >> 5) & 63, bb = b & 31;
+    const int r = ar + (br - ar) * k + 0.5f, g = ag + (bg - ag) * k + 0.5f, bl = ab + (bb - ab) * k + 0.5f;
+    return (r << 11) | (g << 5) | bl;
+}
+
+static uint16_t s_dot, s_dotEdge;                 // Punktfarben der Erde (aus dem Stil)
+static int16_t  E_X, E_Y, E_COLS, E_ROWS, E_BPR;   // Lage der Erde
+static const uint8_t* E_MASK;
+static int16_t  K_OX, K_OY;                       // Ursprung des 240x240-Uhr-Layouts
+
+static void earth_colors()
+{
+    // Night blue = Tuerkis wie die Vorlage (User), Classic/Espresso = Akzentfarbe, beides blass ueber dem Hintergrund
+    const uint16_t base = s_cfg.design == 2 ? 0x1186 : rgb565_mix(C_BG, C_ACCENT, 0.28f);
+    s_dot     = base;
+    s_dotEdge = rgb565_mix(C_BG, base, 0.45f);    // Ecken halb hell = leicht abgerundet
+}
+
+static bool earth_bit(int c, int r) { return pgm_read_byte(&E_MASK[r * E_BPR + (c >> 3)]) & (0x80 >> (c & 7)); }
+
+// Rechteck mit Hintergrund + Erdpunkten fuellen (zum Loeschen eines Uhr-Feldes ohne Loch in der Karte)
+static void earth_rect(int16_t rx, int16_t ry, int16_t rw, int16_t rh)
+{
+    tft.fillRect(rx, ry, rw, rh, C_BG);
+    const int c0 = max(0, (rx - E_X) / 4), c1 = min((int)E_COLS - 1, (rx + rw - E_X) / 4);
+    const int r0 = max(0, (ry - E_Y) / 4), r1 = min((int)E_ROWS - 1, (ry + rh - E_Y) / 4);
+    if (c1 < c0 || r1 < r0) return;
+    tft.startWrite();
+    for (int r = r0; r <= r1; r++)
+        for (int c = c0; c <= c1; c++) {
+            if (!earth_bit(c, r)) continue;
+            for (int dy = 0; dy < 3; dy++)
+                for (int dx = 0; dx < 3; dx++) {
+                    const int16_t x = E_X + c * 4 + dx, y = E_Y + r * 4 + dy;
+                    if (x < rx || y < ry || x >= rx + rw || y >= ry + rh) continue;
+                    tft.writePixel(x, y, (dx != 1 && dy != 1) ? s_dotEdge : s_dot);
+                }
+        }
+    tft.endWrite();
+}
+
+struct CkField { int16_t x, y, w, h; char last[40]; };
+static CkField K_HASH, K_RIGHT, K_TIME, K_DATE, K_VER, K_BOT;
+
+static void ck_set(CkField& f, int16_t x, int16_t y, int16_t w, int16_t h)
+{
+    f.x = K_OX + x; f.y = K_OY + y; f.w = w; f.h = h; f.last[0] = 0;
+}
+
+static void draw_clock_frame()
+{
+    s_bootFull = false;
+    earth_colors();
+    if (s_w > s_h) { E_COLS = EARTH320_COLS; E_ROWS = EARTH320_ROWS; E_BPR = EARTH320_BPR; E_MASK = earth320_mask; }
+    else           { E_COLS = EARTH240_COLS; E_ROWS = EARTH240_ROWS; E_BPR = EARTH240_BPR; E_MASK = earth240_mask; }
+    K_OX = (s_w - 240) / 2; K_OY = (s_h - 240) / 2;
+    E_X = (s_w - E_COLS * 4) / 2;
+    E_Y = K_OY + 66 + (108 - E_ROWS * 4) / 2;
+    tft.fillScreen(C_BG);
+    earth_rect(E_X, E_Y, E_COLS * 4, E_ROWS * 4);
+    ck_set(K_HASH, 0, 0, 170, 30);
+    ck_set(K_RIGHT, 170, 0, 70, 30);
+    ck_set(K_TIME, 0, 80, 240, 58);
+    ck_set(K_DATE, 0, 146, 240, 26);
+    ck_set(K_VER, 0, 208, 90, 32);
+    ck_set(K_BOT, 90, 208, 150, 32);
+}
+
+static void put(const char* s, const GFXfont* f, int16_t x, int16_t base, uint16_t col)
+{
+    tft.setFont(f); tft.setTextSize(1); tft.setTextColor(col); tft.setCursor(x, base); tft.print(s);
+}
+
+// Feld nur bei Aenderung neu: Hintergrund (mit Erde) wiederherstellen, dann Text
+static bool ck_changed(CkField& f, const char* key)
+{
+    if (!strcmp(key, f.last)) return false;
+    strlcpy(f.last, key, sizeof(f.last));
+    earth_rect(f.x, f.y, f.w, f.h);
+    return true;
+}
+
+static float s_usd = 0;                           // 1 EUR in USD (0 = noch unbekannt)
+
+// Pool-Name fuer die Uhr: ohne Protokoll und Port, zu breit -> "..." (User 17.11.)
+static void ck_pool(char* out, size_t len, const GFXfont* f, int16_t maxW)
+{
+    String u = g_settings.pools[g_stats.activePool].url;
+    int p = u.indexOf("://");
+    if (p >= 0) u = u.substring(p + 3);
+    p = u.indexOf(':');
+    if (p >= 0) u = u.substring(0, p);
+    if (gfx_width(u.c_str(), f) > maxW) {
+        while (u.length() > 3 && gfx_width((u + "...").c_str(), f) > maxW) u.remove(u.length() - 1);
+        u += "...";
+    }
+    strlcpy(out, u.c_str(), len);
+}
+
+static int update_clock()
+{
+    int n = 0;
+    char b[40];
+    const int16_t X = K_OX, Y = K_OY;
+
+    // oben links: kH/s ohne Nachkomma (abgeschnitten) + kleine Einheit in Archivo
+    snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.khCurrent);
+    if (ck_changed(K_HASH, b)) {
+        put(b, &DSEG7B12pt7b, X + 13, Y + 25, C_GREEN);
+        put("kH/s", &ArchivoNB8pt7b, X + 13 + gfx_width(b, &DSEG7B12pt7b) + 5, Y + 25, C_GREEN);
+        n++;
+    }
+    // oben rechts: Bloecke (nur Zahl) oder Dollarkurs
+    if (s_cfg.ckRight == 1) {
+        if (s_usd > 0) snprintf(b, sizeof(b), "%.2f", s_usd); else strlcpy(b, "-.--", sizeof(b));
+        char key[44]; snprintf(key, sizeof(key), "$%s", b);
+        if (ck_changed(K_RIGHT, key)) {
+            const int16_t w = gfx_width(b, &DSEG7B12pt7b), ws = gfx_width("$", &ArchivoNB12pt7b);
+            put("$", &ArchivoNB12pt7b, X + 227 - w - ws - 2, Y + 25, C_ACCENT);
+            put(b, &DSEG7B12pt7b, X + 227 - w, Y + 25, C_ACCENT);
+            n++;
+        }
+    } else {
+        snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.blocksFound);
+        if (ck_changed(K_RIGHT, b)) { put(b, &DSEG7B12pt7b, X + 227 - gfx_width(b, &DSEG7B12pt7b), Y + 25, C_ACCENT); n++; }
+    }
+
+    time_t now = time(nullptr);
+    struct tm t;
+    localtime_r(&now, &t);
+    const bool ok = t.tm_year >= 120;
+    if (ok) snprintf(b, sizeof(b), "%02d:%02d", t.tm_hour, t.tm_min); else strlcpy(b, "--:--", sizeof(b));
+    if (ck_changed(K_TIME, b)) { put(b, &DSEG7B26pt7b, X + (240 - gfx_width(b, &DSEG7B26pt7b)) / 2, Y + 134, ok ? C_TEXT : C_MUTED); n++; }
+
+    static const char* WD[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
+    char d[16];
+    if (ok) snprintf(d, sizeof(d), "%02d-%02d-%04d", t.tm_mday, t.tm_mon + 1, t.tm_year + 1900); else strlcpy(d, "--------", sizeof(d));
+    snprintf(b, sizeof(b), "%s %s", ok ? WD[t.tm_wday] : "", d);
+    if (ck_changed(K_DATE, b)) {
+        const char* wd = ok ? WD[t.tm_wday] : "";
+        const int16_t w1 = ok ? gfx_width(wd, &DSEG14B9pt7b) + 8 : 0, w2 = gfx_width(d, &DSEG7B9pt7b);
+        const int16_t x = X + (240 - w1 - w2) / 2;
+        if (ok) put(wd, &DSEG14B9pt7b, x, Y + 167, C_TEXT);
+        put(d, &DSEG7B9pt7b, x + w1, Y + 167, C_TEXT);
+        n++;
+    }
+
+    // unten links: Version nur aus Ziffern ("1.3.1-d10" -> "1.3.1.10", 7-Segment kann kein "d")
+    String v = MINER_VERSION;
+    v.replace("-d", ".");
+    if (ck_changed(K_VER, v.c_str())) { put(v.c_str(), &ArchivoNB10pt7b, X + 13, Y + 229, C_MUTED); n++; }
+    // unten rechts: IP oder Pool
+    const int16_t maxW = 227 - 13 - gfx_width(v.c_str(), &ArchivoNB10pt7b) - 12;
+    if (s_cfg.ckBottom == 1) ck_pool(b, sizeof(b), &ArchivoNB10pt7b, maxW);
+    else strlcpy(b, WiFi.localIP().toString().c_str(), sizeof(b));
+    if (ck_changed(K_BOT, b)) { put(b, &ArchivoNB10pt7b, X + 227 - gfx_width(b, &ArchivoNB10pt7b), Y + 229, C_MUTED); n++; }
+    return n;
+}
+
+// Dollarkurs: open.er-api.com (Exchange Rate API, frei, ohne Schluessel, HTTP), alle 6 h, nur wenn eingestellt.
+// Schlanker GET ueber WiFiClient: Arduinos HTTPClient zieht 1,2 KB in den vollen IRAM (Build 17.11.).
+static void usd_fetch()
+{
+    static uint32_t next = 0;
+    static uint32_t dueSince = 0;
+    if (s_cfg.ckRight != 1 || WiFi.status() != WL_CONNECTED || (int32_t)(millis() - next) < 0) { dueSince = 0; return; }
+    // Idee des Users: Abruf ins Schutzfenster der Fritzbox-WLAN-Welle legen (dort laeuft die HW-Schleife ohnehin
+    // vorsichtig). Fenster kommt ~alle 10 min; spaetestens nach 15 min trotzdem holen (Wecker noch nicht eingelernt).
+    if (!dueSince) dueSince = millis() | 1;
+    if (!hw_sha_guard_active() && millis() - dueSince < 15UL * 60UL * 1000UL) return;
+    dueSince = 0;
+    next = millis() + 5UL * 60UL * 1000UL;             // Fehler -> in 5 min nochmal
+    WiFiClient c;
+    c.setTimeout(4);
+    if (!c.connect("open.er-api.com", 80, 4000)) return;
+    c.print("GET /v6/latest/USD HTTP/1.0\r\nHost: open.er-api.com\r\nUser-Agent: ESPressMiner32\r\nConnection: close\r\n\r\n");
+    if (!c.find("\r\n\r\n")) { c.stop(); return; }   // Kopf ueberspringen
+    JsonDocument filter; filter["rates"]["EUR"] = true;
+    JsonDocument doc;
+    if (!deserializeJson(doc, c, DeserializationOption::Filter(filter))) {
+        const float eur = doc["rates"]["EUR"] | 0.0f;
+        if (eur > 0.1f) { s_usd = 1.0f / eur; next = millis() + 6UL * 60UL * 60UL * 1000UL; }   // Kurs aendert sich 1x/Tag
+    }
+    c.stop();
+}
+
+// ---- Umschalten Dashboard <-> Uhr: Touch (CYD: XPT2046-Meldepin 36, NM-TV: Touch-Pin), BOOT kurz, Webseite
+#if defined(BOARD_CYD)
+static const int CYD_TOUCH_IRQ = 36;
+#endif
+static const int TOUCH_CAND[3] = { 27, 32, 33 };          // freie ESP32-Touch-Pins am NM-TV (Kalibrierung per Web)
+static const touch_pad_t TOUCH_PAD[3] = { TOUCH_PAD_NUM7, TOUCH_PAD_NUM9, TOUCH_PAD_NUM8 };   // GPIO 27 / 32 / 33
+static uint16_t s_touchRaw[3] = { 0, 0, 0 };
+static uint16_t s_touchBase = 0;
+static volatile uint32_t s_calEnd = 0;     // Kalibrierung laeuft bis (0 = aus)
+static uint16_t s_calMin = 0;
+static char     s_calMsg[64] = "";
+
+static void page_toggle() { s_cfg.page ^= 1; cfg_save(); s_redraw = true; }
+
+// Tasten/Touch: beim LOSLASSEN entscheiden (Regel des Users): kurz = Seite wechseln
+static void press_logic(bool down, uint32_t& since, uint32_t now)
+{
+    if (down && !since) since = now;
+    if (!down && since) {
+        const uint32_t dur = now - since;
+        since = 0;
+        if (dur >= 40 && dur < 1000) page_toggle();
+    }
+}
+
+// NM-TV-Touch: Logik 1:1 aus MiniTV-Hybrid-AllDevices/include/touch.h (Pin 32, Ruhewert laufend mitteln,
+// TOUCH_DROP_PCT unter Ruhe = beruehrt, 3 Messungen bestaetigen, Ausloesen beim Loslassen nach 60 ms .. 3 s,
+// danach 1 s Sperre, 10 s Dauerdruck -> neu einmessen). Gelesen per ESP-IDF mit kurzer Messzeit:
+// Arduino touchRead() zieht Code in den vollen IRAM, und die Werks-Messzeit (~4 ms je Pin) bremste den
+// SW-Miner auf Kern 0 um 2 kH/s (17.11.: ohne Touch 35,1, Werkszeit 33,0, kurze Messzeit 35,0).
+static uint16_t touch_read_pad(int idx)
+{
+    static bool init = false;
+    if (!init) {
+        init = true;
+        touch_pad_init();
+        touch_pad_set_fsm_mode(TOUCH_FSM_MODE_SW);
+        touch_pad_set_voltage(TOUCH_HVOLT_2V7, TOUCH_LVOLT_0V5, TOUCH_HVOLT_ATTEN_1V);
+        touch_pad_set_meas_time(0x1000, 0x400);          // 0x400 Takte @ 8 MHz = 0,13 ms je Messung
+        for (int i = 0; i < 3; i++) touch_pad_config(TOUCH_PAD[i], 0);
+    }
+    uint16_t v = 0;
+    touch_pad_read(TOUCH_PAD[idx], &v);
+    s_touchRaw[idx] = v;
+    return v;
+}
+
+static bool touch_pressed(int idx, uint32_t now)
+{
+    static uint32_t lastSample = 0, pressStart = 0, lastTrigger = 0;
+    static int  below = 0;
+    static bool pressed = false;
+    static float base = 0;
+    if (now - lastSample < 20) return false;
+    lastSample = now;
+    const uint16_t v = touch_read_pad(idx);
+    if (!v) return false;
+    if (base <= 0) { base = v; return false; }
+    s_touchBase = (uint16_t)base;
+    const float thresh  = base * (100 - s_cfg.touchPct) / 100.0f;
+    const float release = base * (100 - s_cfg.touchPct / 2) / 100.0f;
+    if (s_calEnd) {                                   // Kalibrierung: 5 s Finger drauf, tiefsten Wert merken
+        if (v < s_calMin) s_calMin = v;
+        if ((int32_t)(now - s_calEnd) >= 0) {
+            s_calEnd = 0;
+            const int drop = (int)((base - s_calMin) * 100 / base);
+            if (drop >= 6) {
+                s_cfg.touchPct = constrain(drop / 2, 3, 70);   // Schwelle = Mitte zwischen frei und beruehrt
+                cfg_save();
+                snprintf(s_calMsg, sizeof(s_calMsg), "OK: touch drops %d %%, threshold now %d %%", drop, s_cfg.touchPct);
+            } else {
+                snprintf(s_calMsg, sizeof(s_calMsg), "No touch seen (drop %d %%) - threshold kept at %d %%", drop, s_cfg.touchPct);
+            }
+        }
+        pressed = false; below = 0;
+        return false;
+    }
+    if (!pressed) {
+        if (v < thresh) { if (++below >= 3) { pressed = true; pressStart = now; below = 0; } }
+        else { below = 0; if (v > release) base = base * 0.98f + v * 0.02f; }   // Drift nachfuehren
+        return false;
+    }
+    if (now - pressStart > 10000UL) { base = v; pressed = false; return false; }   // Dauerdruck -> neu einmessen
+    if (v > release) {
+        pressed = false;
+        const uint32_t dur = now - pressStart;
+        if (dur >= 60 && dur <= 3000 && now - lastTrigger >= 1000) { lastTrigger = now; return true; }
+    }
+    return false;
+}
+
+static void input_tick()
+{
+    static uint32_t bootSince = 0, touchSince = 0;
+    const uint32_t now = millis();
+    press_logic(digitalRead(0) == LOW, bootSince, now);          // BOOT (GPIO 0, falls vorhanden); 5 s = Werksreset
+#if defined(BOARD_CYD)
+    press_logic(digitalRead(CYD_TOUCH_IRQ) == LOW, touchSince, now);
+#else
+    (void)touchSince;
+    int idx = -1;
+    for (int i = 0; i < 3; i++) if (TOUCH_CAND[i] == s_cfg.touchPin) idx = i;
+    if (idx >= 0 && touch_pressed(idx, now)) page_toggle();
+    // die anderen beiden Pins nur selten (Anzeige auf der Webseite)
+    static uint32_t lastOther = 0;
+    if (now - lastOther >= 2000) { lastOther = now; for (int i = 0; i < 3; i++) if (i != idx) touch_read_pad(i); }
+#endif
+}
+
+static void draw_page() { if (s_cfg.page == 1) draw_clock_frame(); else draw_frame(); }
+
 static void display_task(void*)
 {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
@@ -566,22 +906,27 @@ static void display_task(void*)
         display_progress(100, line);
     }
     vTaskDelay(pdMS_TO_TICKS(3000));
-    draw_frame();
+#if defined(BOARD_CYD)
+    pinMode(CYD_TOUCH_IRQ, INPUT);
+#endif
+    draw_page();
 
     uint32_t lastLog = millis(), lastUpd = 0;
     for (;;) {
         brightness_tick();
+        input_tick();
+        usd_fetch();
         if (s_rotate) {
             s_rotate = false;
             tft.setRotation(s_cfg.rotation);
             s_w = tft.width(); s_h = tft.height();
             s_redraw = true;
         }
-        if (s_redraw) { s_redraw = false; draw_frame(); lastUpd = 0; }
+        if (s_redraw) { s_redraw = false; draw_page(); lastUpd = 0; }
         if (lastUpd && millis() - lastUpd < DISPLAY_UPDATE_MS) { vTaskDelay(pdMS_TO_TICKS(50)); continue; }
         lastUpd = millis() | 1;
         const uint32_t t0 = micros();
-        const int n = update_fields();
+        const int n = s_cfg.page == 1 ? update_clock() : update_fields();
         const uint32_t dt = micros() - t0;
         g_disp.updates++;
         g_disp.fields += n;
@@ -635,6 +980,18 @@ void display_cfg_json(JsonDocument& d)
     d["hasNight"]  = true;
 #endif
     d["nowBri"]    = (int)(s_curBri + 0.5f);
+    d["page"]      = s_cfg.page;                   // d10: 0 Dashboard, 1 Uhr
+    d["ckRight"]   = s_cfg.ckRight;
+    d["ckBottom"]  = s_cfg.ckBottom;
+    d["usd"]       = s_usd;
+#if !defined(BOARD_CYD)
+    d["touchPin"]  = s_cfg.touchPin;
+    d["touchPct"]  = s_cfg.touchPct;
+    d["touchBase"] = s_touchBase;
+    d["touchCal"]  = s_calEnd ? "running" : s_calMsg;
+    JsonArray tr = d["touch"].to<JsonArray>();     // Rohwerte Pin 27/32/33 (Beruehren = Wert faellt)
+    for (int i = 0; i < 3; i++) tr.add(s_touchRaw[i]);
+#endif
     // Statuszeile: "now: night until 07:00" / "now: day, night starts 22:00"
     char st[48];
     const int ns = night_state();
@@ -665,7 +1022,18 @@ const char* display_cfg_set(JsonDocument& j)
 #endif
     if (j["nightFrom"].is<const char*>() && !parse_hhmm(j["nightFrom"], c.nightFrom)) return "Night from: use HH:MM";
     if (j["nightTo"].is<const char*>()   && !parse_hhmm(j["nightTo"], c.nightTo))     return "Night to: use HH:MM";
-    const bool redraw = c.design != s_cfg.design;
+    if (j["page"].is<int>())     c.page     = constrain((int)j["page"], 0, 1);
+    if (j["ckRight"].is<int>())  c.ckRight  = constrain((int)j["ckRight"], 0, 1);
+    if (j["ckBottom"].is<int>()) c.ckBottom = constrain((int)j["ckBottom"], 0, 1);
+#if !defined(BOARD_CYD)
+    if (j["touchPin"].is<int>()) { const int t = j["touchPin"]; c.touchPin = (t == 27 || t == 32 || t == 33) ? t : -1; }
+    if (j["touchPct"].is<int>()) c.touchPct = constrain((int)j["touchPct"], 3, 70);
+    if (j["touchCal"].is<bool>() && j["touchCal"]) {            // 5 s Finger auf den Sensor
+        s_calMin = 0xFFFF; s_calMsg[0] = 0; s_calEnd = millis() + 5000;
+    }
+#endif
+    const bool redraw = c.design != s_cfg.design || c.page != s_cfg.page ||
+                        c.ckRight != s_cfg.ckRight || c.ckBottom != s_cfg.ckBottom;
     const bool rotate = c.rotation != s_cfg.rotation;
     s_cfg = c;
     cfg_save();

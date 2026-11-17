@@ -99,7 +99,7 @@ border-radius:8px;padding:9px 10px;font-size:14px}
 <div class="grid">
  <div class="card"><div class="lbl">Hashrate</div><div class="val" id="hr">-</div><div class="sub">kH/s &middot; &Oslash; <span id="avg">-</span></div></div>
  <div class="card"><div class="lbl">Shares (R/A)</div><div class="val" id="sh">-</div><div class="sub" id="shsub">-</div><div class="sub" id="shsub2" style="margin-top:3px;opacity:.85"></div></div>
- <div class="card"><div class="lbl">Best difficulty</div><div class="val" id="best">-</div><div class="sub">since start</div></div>
+ <div class="card"><div class="lbl">Best difficulty</div><div class="val" id="best">-</div><div class="sub" id="bestsub">since start</div></div>
  <div class="card"><div class="lbl">Uptime</div><div class="val" id="up">-</div><div class="sub" id="tot">-</div></div>
 </div>
 <div class="wide"><div class="lbl">Hashrate history (10 min)</div><canvas id="cv"></canvas></div>
@@ -109,6 +109,7 @@ border-radius:8px;padding:9px 10px;font-size:14px}
  <tr><td>Pool difficulty</td><td id="pdiff">-</td></tr>
  <tr><td>Network difficulty</td><td id="ndiff">-</td></tr>
  <tr><td>Blocks found</td><td id="blk">-</td></tr>
+ <tr><td>Operating time (total)</td><td id="optime">-</td></tr>
  <tr><td>Wi-Fi</td><td id="wifi">-</td></tr>
  <tr><td>Chip temperature (rough)</td><td id="ctemp">-</td></tr>
  <tr><td>Free memory</td><td id="heap">-</td></tr>
@@ -170,9 +171,22 @@ border-radius:8px;padding:9px 10px;font-size:14px}
    <div class="sec-h">Pool switching</div>
    <div class="fld"><label for="c_altmin">Alternate automatically every N minutes &nbsp;(0 = off, switch on failure only)</label><input id="c_altmin" type="number" min="0" max="1440" value="0"></div>
   </div>
+  <div class="sec">
+   <div class="sec-h">Statistics</div>
+   <div class="fld" style="display:flex;align-items:center;gap:8px"><label class="tog" style="flex:1">Keep highest difficulty (also after power loss)<input type="checkbox" id="c_keep" onchange="pSave({keepBest:this.checked})"><span class="sw2"></span></label><button type="button" class="swbtn" style="padding:4px 10px" title="Reset highest difficulty to 0" onclick="if(confirm('Reset highest difficulty to 0?'))pSave({resetBest:true})">&#10005;</button></div>
+   <div class="fld">
+    <div class="dstat" style="margin-top:4px">Saved in flash only when a new record arrives. Shown on the display after a restart until a higher one comes.</div></div>
+   <span class="msg" id="pmsg"></span>
+  </div>
   <div class="sec" id="dsec" style="display:none">
    <div class="sec-h">Display <span id="dboard" style="color:var(--dim);font-weight:500;text-transform:none"></span></div>
    <p class="dstat" style="margin:2px 0 6px">Changes here apply immediately (no restart).</p>
+   <div class="fld"><label>Screen (also: tap the display)</label><div class="seg" id="d_page"></div></div>
+   <div class="fld"><label>Clock: top right</label><div class="seg" id="d_ckr"></div></div>
+   <div class="fld"><label>Clock: bottom right</label><div class="seg" id="d_ckb"></div></div>
+   <div class="fld" id="d_tchf" style="display:none"><label>Touch sensor (NM-TV): pin</label><div class="seg" id="d_tch"></div>
+    <div style="margin-top:8px"><button type="button" class="swbtn" onclick="dSave({touchCal:true});setTimeout(()=>dLoad(true),5600)" title="Press, then keep a finger on the sensor for 5 seconds">&#9757; Calibrate touch (hold finger 5 s)</button></div>
+    <div class="dstat" style="margin-top:4px" id="d_tchv"></div></div>
    <div class="fld"><label>Design</label><div class="tiles" id="dtiles"></div></div>
    <div class="fld" id="d_rotf" style="display:none"><label>Rotation</label><div class="seg" id="d_rot"></div></div>
    <div class="fld"><label for="d_day" id="d_dayl">Day brightness</label>
@@ -238,6 +252,12 @@ function dSlider(id,key){const el=$(id),v=$(id+'v');
 async function dLoad(statusOnly){let d;try{const r=await fetch('/api/display');if(!r.ok)return;d=await r.json()}catch(e){return}
  $('dsec').style.display='';$('dstat').textContent=d.status+' · display now '+d.nowBri+' %';
  $('d_night').style.opacity=d.nightOn?1:.45;
+ dSeg('d_page','page',d.page,['Dashboard','Clock']);
+ dSeg('d_ckr','ckRight',d.ckRight,['Blocks','Dollar']);
+ dSeg('d_ckb','ckBottom',d.ckBottom,['IP address','Pool']);
+ if(d.touch){$('d_tchf').style.display='';const pins=[-1,27,32,33];
+  $('d_tch').innerHTML=pins.map(p=>'<button type="button" class="'+(p===d.touchPin?'act':'')+'" onclick="dSave({touchPin:'+p+'})">'+(p<0?'Off':p)+'</button>').join('');
+  $('d_tchv').innerHTML='Raw values pin 27 / 32 / 33: '+d.touch.join(' / ')+' &middot; threshold '+d.touchPct+' %'+(d.touchCal?' &middot; <b>'+d.touchCal+'</b>':'')}
  if(statusOnly){$('dtiles').querySelectorAll('.tile').forEach((t,i)=>t.classList.toggle('act',i===d.design));$('d_rot').querySelectorAll('button').forEach((t,i)=>t.className=i===d.rotation?'act':'');return}
  $('dboard').textContent='· '+d.board;
  $('dtiles').innerHTML=DESIGNS.map((x,i)=>'<button type="button" class="tile'+(i===d.design?' act':'')+'" onclick="dSave({design:'+i+'})"><div class="sw" style="background:'+x[1]+'"><i style="background:'+x[2]+'"></i><i style="background:'+x[3]+'"></i><i style="background:'+x[4]+'"></i><i style="background:'+x[5]+'"></i></div>'+x[0]+'</button>').join('');
@@ -250,6 +270,9 @@ async function dLoad(statusOnly){let d;try{const r=await fetch('/api/display');i
  $('d_rotf').style.display=d.hasRotation?'':'none';
  $('d_rot').innerHTML=[0,1,2,3].map(r=>'<button type="button" class="'+(r===d.rotation?'act':'')+'" onclick="dSave({rotation:'+r+'})">'+(r*90)+'&deg;</button>').join('');
  $('d_from').value=d.nightFrom;$('d_to').value=d.nightTo}
+function dSeg(id,key,val,names){$(id).innerHTML=names.map((n,i)=>'<button type="button" class="'+(i===val?'act':'')+'" onclick="dSave({'+key+':'+i+'})">'+n+'</button>').join('')}
+async function pSave(o){const m=$('pmsg');
+ try{const r=await fetch('/api/persist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});m.textContent=r.ok?'Saved':await r.text()}catch(e){m.textContent='Saving failed'}}
 dSlider('d_day','dayBri');dSlider('d_ngt','nightBri');
 async function saveCfg(){const m=$('cmsg'),b=$('csave');
  const body={minerName:$('c_name').value,hostname:$('c_host').value,wifiSsid:$('c_ssid').value,wifiPass:$('c_wpass').value,
@@ -322,7 +345,7 @@ async function tick(){try{const s=await(await fetch('/api/stats')).json();
   // v1.3.1: Wellen-Teil nur mit SHOW_WAVE_ERRORS 1 (config.h, kommt als showWave aus /api/stats)
   $('shsub2').textContent=le+' discarded (calculation errors)'
     +(s.showWave&&we?' (+'+we+' from '+(s.guardBursts||0)+' Wi-Fi wave'+((s.guardBursts||0)==1?'':'s')+')':'');}
- $('best').textContent=fd(s.bestDiff);$('up').textContent=fu(s.uptime)+(s.restarts?' ↻'+s.restarts:'');$('up').title=s.restarts?s.restarts+' restart(s) without power loss - uptime continues':'since power-on';$('tot').textContent=fh(s.totalHashes);
+ $('best').textContent=fd(s.bestDiff);$('bestsub').textContent=s.keepBest?'kept (saved)':'since start';if(s.opSeconds!=null)$('optime').textContent=Math.floor(s.opSeconds/86400)+' d '+Math.floor(s.opSeconds/3600%24)+' h';if($('c_keep'))$('c_keep').checked=!!s.keepBest;$('up').textContent=fu(s.uptime)+(s.restarts?' ↻'+s.restarts:'');$('up').title=s.restarts?s.restarts+' restart(s) without power loss - uptime continues':'since power-on';$('tot').textContent=fh(s.totalHashes);
  $('pool').textContent=s.noPool?'no pool yet - enter it in Settings':s.pool+(s.authorized?'':s.connected?' (connecting...)':' (disconnected)');
  $('pd').className='dot'+(s.authorized?' on':'');$('pname').textContent=s.poolName+(s.poolAltMin?' ⇆ every '+s.poolAltMin+' min':'');$('user').textContent=s.user;
  $('swbtn').style.display=s.hasSecondary?'':'none';
