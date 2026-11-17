@@ -124,7 +124,7 @@ static void cfg_load()
         p.end();
     }
     if (s_cfg.design > 2) s_cfg.design = 1;
-    if (s_cfg.page > 1) s_cfg.page = 0;
+    if (s_cfg.page > 11) s_cfg.page = 0;                // 0 Dashboard, 1 Uhr, 2.. Bilder (d11)
     if (s_cfg.ckRight > 1) s_cfg.ckRight = 0;
     if (s_cfg.ckBottom > 1) s_cfg.ckBottom = 0;
     if (s_cfg.touchPct < 3 || s_cfg.touchPct > 70) s_cfg.touchPct = 12;
@@ -250,6 +250,7 @@ static void text_center(const char* s, int16_t y, uint8_t size, uint16_t fg, uin
 // ---- Startbild ------------------------------------------------------------------------------
 static const int16_t BAR_X = 20, BAR_H = 10;
 
+static void pics_load();
 void display_begin()
 {
 #if TFT_EN_PIN >= 0
@@ -257,6 +258,7 @@ void display_begin()
     digitalWrite(TFT_EN_PIN, LOW);
 #endif
     cfg_load();
+    pics_load();                               // d11: vor dem Webserver, sonst ueberschreibt ein fruehes Speichern die URLs
     apply_design(s_cfg.design);
     // PWM 1 kHz / 8 bit wie Vorlage, aber direkt per ESP-IDF: Arduinos ledcAttach() zieht Code in den IRAM,
     // der durch HW_LOOP_PIN + schnellen SW-Scan voll ist (Build 16.10.: iram0_0_seg 56 Byte uebergelaufen)
@@ -803,7 +805,7 @@ static void usd_fetch()
     dueSince = 0;
     next = millis() + 5UL * 60UL * 1000UL;             // Fehler -> in 5 min nochmal
     WiFiClient c;
-    c.setTimeout(4);
+    c.setTimeout(6000);                                  // Millisekunden!
     if (!c.connect("open.er-api.com", 80, 4000)) return;
     c.print("GET /v6/latest/USD HTTP/1.0\r\nHost: open.er-api.com\r\nUser-Agent: ESPressMiner32\r\nConnection: close\r\n\r\n");
     if (!c.find("\r\n\r\n")) { c.stop(); return; }   // Kopf ueberspringen
@@ -828,7 +830,8 @@ static volatile uint32_t s_calEnd = 0;     // Kalibrierung laeuft bis (0 = aus)
 static uint16_t s_calMin = 0;
 static char     s_calMsg[64] = "";
 
-static void page_toggle() { s_cfg.page ^= 1; cfg_save(); s_redraw = true; }
+static int pic_count();
+static void page_toggle() { s_cfg.page = (s_cfg.page + 1 >= 2 + pic_count()) ? 0 : s_cfg.page + 1; cfg_save(); s_redraw = true; }
 
 // Tasten/Touch: beim LOSLASSEN entscheiden (Regel des Users): kurz = Seite wechseln
 static void press_logic(bool down, uint32_t& since, uint32_t now)
@@ -925,7 +928,180 @@ static void input_tick()
 #endif
 }
 
-static void draw_page() { if (s_cfg.page == 1) draw_clock_frame(); else draw_frame(); }
+// ---- Bild-Seiten (ab 1.3.1-d11): Bilderrahmen aus MiniTV-Hybrid-AllDevices/include/view_picture.h ----------
+// Bis zu 10 URLs (Reiter "Pictures" im Web), jede URL = eine Seite beim Tippen (Dashboard -> Uhr -> Bild 1..n).
+// Server liefert 240x240 (oder am CYD quer 320x240) RGB565 Big-Endian, zeilenweise direkt auf den SPI-Bus.
+// Geladen wird NUR das gerade angezeigte Bild, alle picSec Sekunden (Standard 60) - sonst kein Abruf, kein Verlust.
+// Abruf per WiFiClient statt HTTPClient (IRAM randvoll, siehe Dollarkurs).
+static const int PIC_MAX = 10;
+static String   s_picUrl[PIC_MAX];
+static uint16_t s_picSec = 60;
+static bool     s_picOv  = false;                      // Overlay kH/s + Bloecke oben auf den Bildern (User)
+static char     s_ovLast[24] = "";
+static uint32_t s_picNext = 0;
+static uint8_t  s_picRetries = 0;
+static bool     s_picWide = false;
+static char     s_picMsg[72] = "";
+
+static void pics_load()
+{
+    Preferences p;
+    if (!p.begin("esppics", true)) return;
+    for (int i = 0; i < PIC_MAX; i++) { char k[6]; snprintf(k, sizeof(k), "u%d", i); s_picUrl[i] = p.getString(k, ""); }
+    s_picSec = p.getUShort("sec", 60);
+    s_picOv  = p.getBool("ov", false);
+    p.end();
+    if (s_picSec < 10 || s_picSec > 3600) s_picSec = 60;
+}
+
+static void pics_save()
+{
+    Preferences p;
+    if (!p.begin("esppics", false)) return;
+    for (int i = 0; i < PIC_MAX; i++) { char k[6]; snprintf(k, sizeof(k), "u%d", i); p.putString(k, s_picUrl[i]); }
+    p.putUShort("sec", s_picSec);
+    p.putBool("ov", s_picOv);
+    p.end();
+}
+
+// Seite 2.. -> Index der n-ten belegten URL (-1 = keine)
+static int pic_index_for_page(uint8_t page)
+{
+    int n = (int)page - 2;
+    for (int i = 0; i < PIC_MAX; i++) if (s_picUrl[i].length()) { if (n == 0) return i; n--; }
+    return -1;
+}
+static int pic_count() { int n = 0; for (int i = 0; i < PIC_MAX; i++) if (s_picUrl[i].length()) n++; return n; }
+
+static void pic_msg(const char* m) { strlcpy(s_picMsg, m, sizeof(s_picMsg)); Serial.printf("[PIC] %s\n", m); }
+
+// Fehler: Text unten auf schwarzem Band, altes Bild bleibt sonst stehen (MiniTV zeigte eine ganze Fehlerseite)
+static void pic_error(const char* m)
+{
+    pic_msg(m);
+    tft.fillRect(0, s_h - 18, s_w, 18, C_BG);
+    tft.setFont(nullptr); tft.setTextSize(1); tft.setTextColor(C_BAD, C_BG);
+    tft.setCursor(4, s_h - 13); tft.print(m);
+}
+
+static bool pic_fetch(int idx)
+{
+    if (WiFi.status() != WL_CONNECTED) { pic_error("no Wi-Fi"); return false; }
+    String u = s_picUrl[idx];
+    if (!u.startsWith("http://")) { pic_error("only http:// URLs"); return false; }
+    // Cache-Buster wie MiniTV (?t= / &t=)
+    const char last = u[u.length() - 1];
+    u += (last == '?' || last == '&') ? "t=" : (u.indexOf('?') >= 0 ? "&t=" : "?t=");
+    u += String(millis());
+    String hp = u.substring(7);
+    const int slash = hp.indexOf('/');
+    String path = slash >= 0 ? hp.substring(slash) : "/";
+    hp = slash >= 0 ? hp.substring(0, slash) : hp;
+    uint16_t port = 80;
+    const int colon = hp.indexOf(':');
+    if (colon >= 0) { port = hp.substring(colon + 1).toInt(); hp = hp.substring(0, colon); }
+
+    WiFiClient c;
+    c.setTimeout(6000);                                  // Millisekunden! (17.11.: 5 = 5 ms -> "no answer")
+    if (!c.connect(hp.c_str(), port, 4000)) { pic_error("server not reachable"); return false; }
+    c.printf("GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: ESPressMiner32\r\nConnection: close\r\n\r\n", path.c_str(), hp.c_str());
+    // Kopf lesen: Status, Content-Type, Content-Length
+    String line = c.readStringUntil('\n');
+    if (line.indexOf(" 200") < 0) { c.stop(); line.trim(); pic_error(line.length() ? line.c_str() : "no answer"); return false; }
+    int len = -1; bool png = false;
+    for (;;) {
+        line = c.readStringUntil('\n');
+        line.trim();
+        if (!line.length()) break;
+        String l = line; l.toLowerCase();
+        if (l.startsWith("content-length:")) len = l.substring(15).toInt();
+        if (l.startsWith("content-type:") && l.indexOf("png") >= 0) png = true;
+    }
+    if (png) { c.stop(); pic_error("PNG instead of RAW: remove &png=1"); return false; }
+    int w = 0;
+    if (len == 240 * 240 * 2) w = 240;
+    else if (len == s_w * 240 * 2 && s_w > 240 && s_h == 240) w = s_w;     // CYD quer: volle Breite
+    if (!w) { c.stop(); char m[48]; snprintf(m, sizeof(m), "size %d B (need 240x240 RGB565)", len); pic_error(m); return false; }
+    const int16_t x0 = (s_w - w) / 2, y0 = (s_h - 240) / 2;
+    if (w == 240 && (s_w > 240 || s_h > 240) && s_picWide) tft.fillScreen(C_BG);   // Reste eines 320er-Bildes
+    s_picWide = (w != 240);
+    const int ROW = w * 2;
+    uint8_t row[320 * 2];
+    const uint8_t page0 = s_cfg.page;
+    for (int y = 0; y < 240; y++) {
+        int got = 0;
+        const uint32_t t0 = millis();
+        while (got < ROW && millis() - t0 < 5000) {
+            const int av = c.available();
+            if (av > 0) got += c.readBytes(row + got, min(av, ROW - got));
+            else vTaskDelay(1);
+        }
+        if (got < ROW) {
+            c.stop();
+            if (s_picRetries < 2) {                       // WLAN-Haenger: 2x still nach 2 s neu (MiniTV)
+                s_picRetries++;
+                s_picNext = millis() + 2000;
+                return false;
+            }
+            s_picRetries = 0;
+            char m[32]; snprintf(m, sizeof(m), "aborted at row %d", y); pic_error(m);
+            return false;
+        }
+        tft.startWrite();
+        tft.setAddrWindow(x0, y0 + y, w, 1);
+        TFT_SPI.writeBytes(row, ROW);                    // Big-Endian Bytes direkt, wie MiniTV
+        tft.endWrite();
+        if (s_cfg.page != page0) { c.stop(); return false; }   // weitergetippt -> abbrechen
+    }
+    c.stop();
+    s_picRetries = 0;
+    snprintf(s_picMsg, sizeof(s_picMsg), "picture %d OK", idx + 1);
+    return true;
+}
+
+static void draw_pic_frame()
+{
+    s_bootFull = false;
+    tft.fillScreen(C_BG);
+    s_picWide = false;
+    s_picNext = 0;                                       // sofort laden
+}
+
+// alle Sekunde aus dem Display-Task: nur die angezeigte Bild-Seite laedt
+// Overlay (User 17.11.): Bilder sind statisch -> oben zwei dunkle Kapseln mit kH/s und Bloecken, wie auf der Uhr.
+// Eigener Hintergrund: bei neuer Zahl nur die Kapsel neu, das Bild darunter bleibt.
+static void pic_overlay(bool force)
+{
+    if (!s_picOv) return;
+    char h[12], b[12], key[24];
+    snprintf(h, sizeof(h), "%lu", (unsigned long)g_stats.khCurrent);
+    snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.blocksFound);
+    snprintf(key, sizeof(key), "%s|%s", h, b);
+    if (!force && !strcmp(key, s_ovLast)) return;
+    strlcpy(s_ovLast, key, sizeof(s_ovLast));
+    const int16_t wh = gfx_width(h, &DSEG7B12pt7b), wu = gfx_width("kH/s", &ArchivoNB8pt7b), wb = gfx_width(b, &DSEG7B12pt7b);
+    const int16_t lw = 8 + wh + 4 + wu + 8;
+    tft.fillRect(0, 0, 116, 30, C_BG);                       // eckig, ganz in der Ecke 0,0 (User); feste Breite
+    put(h, &DSEG7B12pt7b, 6, 25, C_GREEN);
+    put("kH/s", &ArchivoNB8pt7b, 6 + wh + 4, 25, C_GREEN);
+    (void)lw;
+    const int16_t bw = max<int16_t>(28, wb + 16);
+    tft.fillRect(s_w - 60, 0, 60, 30, C_BG);                 // oben rechts bündig
+    put(b, &DSEG7B12pt7b, s_w - 6 - wb, 25, C_ACCENT);
+    (void)bw;
+}
+
+static void pic_tick()
+{
+    if (s_cfg.page < 2) return;
+    const int idx = pic_index_for_page(s_cfg.page);
+    if (idx < 0) { s_cfg.page = 0; s_redraw = true; return; }
+    if (s_picNext && (int32_t)(millis() - s_picNext) < 0) return;
+    s_picNext = millis() + (uint32_t)s_picSec * 1000UL;
+    if (pic_fetch(idx)) pic_overlay(true);                   // nach neuem Bild Kapseln neu drauf
+}
+
+static void draw_page() { if (s_cfg.page == 1) draw_clock_frame(); else if (s_cfg.page >= 2) draw_pic_frame(); else draw_frame(); }
 
 static void display_task(void*)
 {
@@ -944,6 +1120,7 @@ static void display_task(void*)
 #if defined(BOARD_CYD)
     pinMode(CYD_TOUCH_IRQ, INPUT);
 #endif
+    if (s_cfg.page >= 2 && pic_index_for_page(s_cfg.page) < 0) s_cfg.page = 0;
     draw_page();
 
     uint32_t lastLog = millis(), lastUpd = 0;
@@ -958,6 +1135,13 @@ static void display_task(void*)
             s_redraw = true;
         }
         if (s_redraw) { s_redraw = false; draw_page(); lastUpd = 0; }
+        if (s_cfg.page >= 2) {                               // Bild-Seite: Bild + optional Overlay
+            pic_tick();
+            static uint32_t lastOv = 0;
+            if (millis() - lastOv >= DISPLAY_UPDATE_MS) { lastOv = millis(); pic_overlay(false); }
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
         if (lastUpd && millis() - lastUpd < DISPLAY_UPDATE_MS) { vTaskDelay(pdMS_TO_TICKS(50)); continue; }
         lastUpd = millis() | 1;
         const uint32_t t0 = micros();
@@ -1019,6 +1203,11 @@ void display_cfg_json(JsonDocument& d)
     d["ckRight"]   = s_cfg.ckRight;
     d["ckBottom"]  = s_cfg.ckBottom;
     d["usd"]       = s_usd;
+    JsonArray pu = d["pics"].to<JsonArray>();       // d11: Bild-URLs (Reiter "Pictures")
+    for (int i = 0; i < PIC_MAX; i++) pu.add(s_picUrl[i]);
+    d["picSec"]    = s_picSec;
+    d["picMsg"]    = s_picMsg;
+    d["picOv"]     = s_picOv;
 #if !defined(BOARD_CYD)
     d["touchPin"]  = s_cfg.touchPin;
     d["touchPct"]  = s_cfg.touchPct;
@@ -1057,7 +1246,7 @@ const char* display_cfg_set(JsonDocument& j)
 #endif
     if (j["nightFrom"].is<const char*>() && !parse_hhmm(j["nightFrom"], c.nightFrom)) return "Night from: use HH:MM";
     if (j["nightTo"].is<const char*>()   && !parse_hhmm(j["nightTo"], c.nightTo))     return "Night to: use HH:MM";
-    if (j["page"].is<int>())     c.page     = constrain((int)j["page"], 0, 1);
+    if (j["page"].is<int>())     c.page     = constrain((int)j["page"], 0, 11);
     if (j["ckRight"].is<int>())  c.ckRight  = constrain((int)j["ckRight"], 0, 1);
     if (j["ckBottom"].is<int>()) c.ckBottom = constrain((int)j["ckBottom"], 0, 1);
 #if !defined(BOARD_CYD)
@@ -1067,6 +1256,23 @@ const char* display_cfg_set(JsonDocument& j)
         s_calMin = 0xFFFF; s_calMsg[0] = 0; s_calEnd = millis() + 5000;
     }
 #endif
+    bool picsChanged = false;
+    if (j["pics"].is<JsonArray>()) {
+        int i = 0;
+        for (JsonVariant v : j["pics"].as<JsonArray>()) {
+            if (i >= PIC_MAX) break;
+            String u = v.as<const char*>() ? v.as<const char*>() : "";
+            u.trim();
+            if (u.length() > 200) return "URL too long (max. 200)";
+            if (u.length() && !u.startsWith("http://")) return "Only http:// URLs";
+            s_picUrl[i++] = u;
+        }
+        while (i < PIC_MAX) s_picUrl[i++] = "";
+        picsChanged = true;
+    }
+    if (j["picSec"].is<int>()) { s_picSec = constrain((int)j["picSec"], 10, 3600); picsChanged = true; }
+    if (j["picOv"].is<bool>()) { s_picOv = j["picOv"]; picsChanged = true; s_ovLast[0] = 0; }
+    if (picsChanged) { pics_save(); s_picNext = 0; if (c.page >= 2 && pic_index_for_page(c.page) < 0) c.page = 0; }
     const bool redraw = c.design != s_cfg.design || c.page != s_cfg.page ||
                         c.ckRight != s_cfg.ckRight || c.ckBottom != s_cfg.ckBottom;
     const bool rotate = c.rotation != s_cfg.rotation;

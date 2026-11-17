@@ -3,6 +3,8 @@
 #include "credentials.h"
 
 #include <Preferences.h>
+#include <WiFi.h>
+#include <esp_wifi.h>
 
 #ifndef POOL2_URL
 #define POOL2_URL      ""
@@ -59,6 +61,22 @@ bool settings_load()
         Serial.println("[Settings] Settings taken over from old namespace");
     } else if (!s_configured) {
         load_from(NVS_NAMESPACE);   // Vorbelegung aus credentials.h
+        // d11: Umstieg von einer anderen Firmware (MiniTV, NerdMiner ...): das WLAN, das der ESP32 selbst zuletzt
+        // gespeichert hat (Wi-Fi-NVS des Chips), als WLAN 1 uebernehmen - bleibt im Geraet, wird nie angezeigt.
+        if (g_settings.wifiSsid.isEmpty()) {
+            WiFi.mode(WIFI_STA);
+            wifi_config_t wc = {};
+            if (esp_wifi_get_config(WIFI_IF_STA, &wc) == ESP_OK && wc.sta.ssid[0]) {
+                Settings s = g_settings;
+                s.wifiSsid = String((const char*)wc.sta.ssid).substring(0, 32);
+                char pw[65] = {};
+                memcpy(pw, wc.sta.password, 64);
+                s.wifiPass = pw;
+                memset(pw, 0, sizeof(pw));
+                settings_save(s);
+                Serial.printf("[Settings] Wi-Fi \"%s\" taken over from the previous firmware\n", s.wifiSsid.c_str());
+            }
+        }
     }
     return s_configured;
 }

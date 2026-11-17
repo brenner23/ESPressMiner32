@@ -94,6 +94,7 @@ border-radius:8px;padding:9px 10px;font-size:14px}
 </style></head><body>
 <div class="top">
  <h1 id="mn">ESP32 Miner</h1>
+ <button class="gear" id="picbtn" style="right:120px;display:none" onclick="openPics()" title="Picture pages: tap the display to page through Dashboard, Clock and these pictures">&#128444; Pictures</button>
  <button class="gear" onclick="openCfg()">&#9881; Settings</button>
 </div>
 <div class="grid">
@@ -117,6 +118,21 @@ border-radius:8px;padding:9px 10px;font-size:14px}
  <tr><td>Project</td><td><a href="https://github.com/brenner23/ESPressMiner32" target="_blank" rel="noopener" style="color:inherit">GitHub</a></td></tr>
 </table></div>
 
+<div class="ov" id="pov" onclick="if(event.target===this)this.classList.remove('open')"><div class="modal">
+ <div class="mhead"><h2>Pictures</h2></div>
+ <div class="mbody">
+  <p class="dstat" style="margin:0 0 8px">Each URL is one page when you tap the display: Dashboard &rarr; Clock &rarr; Picture 1 &rarr; &hellip; Only the picture on screen is loaded.
+  Format: 240&times;240 RGB565 (CYD landscape also 320&times;240), <b>http://</b> only, without <code>png=1</code>.</p>
+  <div id="piclist"></div>
+  <div class="fld"><label for="p_sec">Reload the picture on screen every N seconds (10 &ndash; 3600)</label><input id="p_sec" type="number" min="10" max="3600" value="60"></div>
+  <div class="fld"><label class="tog">Show hashrate + blocks on top of the pictures<input type="checkbox" id="p_ov"><span class="sw2"></span></label></div>
+  <div class="dstat" id="pstat"></div>
+ </div>
+ <div class="mfoot">
+  <button class="btn cancel" onclick="$('pov').classList.remove('open')">Close</button>
+  <button class="btn save" onclick="savePics()">Save</button>
+ </div>
+</div></div>
 <div class="ov" id="ov" onclick="if(event.target===this)closeCfg()"><div class="modal">
  <div class="mhead">
   <h2 id="ctitle">Settings</h2>
@@ -250,9 +266,9 @@ function dSlider(id,key){const el=$(id),v=$(id+'v');
  el.oninput=()=>{v.textContent=el.value+' %';clearTimeout(dPrevT);dPrevT=setTimeout(()=>dPrev(el.value),120)};
  el.onchange=()=>{const o={};o[key]=parseInt(el.value);dSave(o)}}
 async function dLoad(statusOnly){let d;try{const r=await fetch('/api/display');if(!r.ok)return;d=await r.json()}catch(e){return}
- $('dsec').style.display='';$('dstat').textContent=d.status+' · display now '+d.nowBri+' %';
+ $('dsec').style.display='';$('picbtn').style.display='';$('dstat').textContent=d.status+' · display now '+d.nowBri+' %';
  $('d_night').style.opacity=d.nightOn?1:.45;
- dSeg('d_page','page',d.page,['Dashboard','Clock']);
+ {const n=['Dashboard','Clock'];(d.pics||[]).forEach((u,i)=>{if(u)n.push('Pic '+(i+1))});dSeg('d_page','page',d.page,n)}
  dSeg('d_ckr','ckRight',d.ckRight,['Blocks','Dollar']);
  dSeg('d_ckb','ckBottom',d.ckBottom,['IP address','Pool']);
  if(d.touch){$('d_tchf').style.display='';const pins=[-1,27,32,33];
@@ -270,10 +286,21 @@ async function dLoad(statusOnly){let d;try{const r=await fetch('/api/display');i
  $('d_rotf').style.display=d.hasRotation?'':'none';
  $('d_rot').innerHTML=[0,1,2,3].map(r=>'<button type="button" class="'+(r===d.rotation?'act':'')+'" onclick="dSave({rotation:'+r+'})">'+(r*90)+'&deg;</button>').join('');
  $('d_from').value=d.nightFrom;$('d_to').value=d.nightTo}
+async function openPics(){let d;try{d=await(await fetch('/api/display')).json()}catch(e){return}
+ $('piclist').innerHTML=(d.pics||[]).map((u,i)=>'<div class="fld"><label>Picture '+(i+1)+'</label><div class="scanrow"><input id="pu'+i+'" maxlength="200" placeholder="http://192.168.0.99/sensors/..." value="'+(u||'').replace(/"/g,'&quot;')+'"><button type="button" class="scanbtn" title="Show this picture now" onclick="showPic('+i+')">&#9654;</button></div></div>').join('');
+ $('p_sec').value=d.picSec||60;$('p_ov').checked=!!d.picOv;$('pstat').textContent=d.picMsg||'';$('pov').classList.add('open')}
+async function savePics(){const urls=[];for(let i=0;i<10;i++){const e=$('pu'+i);urls.push(e?e.value.trim():'')}
+ const st=$('pstat');try{const r=await fetch('/api/display',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pics:urls,picSec:parseInt($('p_sec').value)||60,picOv:$('p_ov').checked})});
+ st.textContent=r.ok?'Saved':await r.text()}catch(e){st.textContent='Saving failed'}}
+async function showPic(i){const urls=[];for(let k=0;k<10;k++){const e=$('pu'+k);urls.push(e?e.value.trim():'')}
+ if(!urls[i]){$('pstat').textContent='Empty';return}let page=2;for(let k=0;k<i;k++)if(urls[k])page++;
+ await fetch('/api/display',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pics:urls,page:page})});
+ setTimeout(async()=>{try{const d=await(await fetch('/api/display')).json();$('pstat').textContent=d.picMsg||''}catch(e){}},4000)}
 function dSeg(id,key,val,names){$(id).innerHTML=names.map((n,i)=>'<button type="button" class="'+(i===val?'act':'')+'" onclick="dSave({'+key+':'+i+'})">'+n+'</button>').join('')}
 async function pSave(o){const m=$('pmsg');
  try{const r=await fetch('/api/persist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});m.textContent=r.ok?'Saved':await r.text()}catch(e){m.textContent='Saving failed'}}
 dSlider('d_day','dayBri');dSlider('d_ngt','nightBri');
+fetch('/api/display').then(r=>{if(r.ok)$('picbtn').style.display=''}).catch(()=>{});
 async function saveCfg(){const m=$('cmsg'),b=$('csave');
  const body={minerName:$('c_name').value,hostname:$('c_host').value,wifiSsid:$('c_ssid').value,wifiPass:$('c_wpass').value,
  wifiSsid2:$('c_ssid2').value,wifiPass2:$('c_wpass2').value,
