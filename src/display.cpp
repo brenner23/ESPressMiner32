@@ -655,12 +655,13 @@ static void draw_clock_frame()
     E_Y = K_OY + 66 + (108 - E_ROWS * 4) / 2;
     tft.fillScreen(C_BG);
     earth_rect(E_X, E_Y, E_COLS * 4, E_ROWS * 4);
-    ck_set(K_HASH, 0, 0, 170, 30);
-    ck_set(K_RIGHT, 170, 0, 70, 30);
+    // Ecktexte in die echten Bildschirmecken (CYD quer/hochkant, User 17.11.), Uhrzeit + Datum mittig
     ck_set(K_TIME, 0, 80, 240, 58);
     ck_set(K_DATE, 0, 146, 240, 26);
-    ck_set(K_VER, 0, 208, 90, 32);
-    ck_set(K_BOT, 90, 208, 150, 32);
+    K_HASH  = { 0, 0, (int16_t)(s_w - 70), 30, "" };
+    K_RIGHT = { (int16_t)(s_w - 70), 0, 70, 30, "" };
+    K_VER   = { 0, (int16_t)(s_h - 32), 90, 32, "" };
+    K_BOT   = { 90, (int16_t)(s_h - 32), (int16_t)(s_w - 90), 32, "" };
 }
 
 static void put(const char* s, const GFXfont* f, int16_t x, int16_t base, uint16_t col)
@@ -674,6 +675,37 @@ static bool ck_changed(CkField& f, const char* key)
     if (!strcmp(key, f.last)) return false;
     strlcpy(f.last, key, sizeof(f.last));
     earth_rect(f.x, f.y, f.w, f.h);
+    return true;
+}
+
+// Wie eine echte 7-Segment-Anzeige: nur geaenderte Zeichen neu malen (User 17.11.: ganzes Feld flackerte).
+// DSEG-Ziffern sind gleich breit; bei anderer Laenge oder Lage -> ganzes Feld neu.
+// x = linker Rand des Textes, Zelle = xAdvance des Zeichens, Hoehe aus yAdvance der Schrift.
+static bool mono_diff(CkField& f, const char* txt, const GFXfont* font, int16_t x, int16_t base, uint16_t col)
+{
+    char key[40];
+    snprintf(key, sizeof(key), "%s@%d", txt, x);
+    const bool sameLayout = strlen(f.last) == strlen(key) && strrchr(f.last, '@') && !strcmp(strrchr(f.last, '@'), strrchr(key, '@'));
+    if (!strcmp(key, f.last)) return false;
+    if (!sameLayout) {
+        strlcpy(f.last, key, sizeof(f.last));
+        earth_rect(f.x, f.y, f.w, f.h);
+        put(txt, font, x, base, col);
+        return true;
+    }
+    const int16_t top = f.y, h = f.h;   // volle Zeilenhoehe: DSEG7 12 pt beginnt schon bei y 2 (Strichrest 17.11.)
+    int16_t cx = x;
+    for (size_t i = 0; txt[i]; i++) {
+        const GFXglyph* g = &font->glyph[(uint8_t)txt[i] - font->first];
+        const int16_t adv = pgm_read_byte(&g->xAdvance);
+        if (txt[i] != f.last[i]) {
+            earth_rect(cx, top, adv, h);
+            char one[2] = { txt[i], 0 };
+            put(one, font, cx, base, col);
+        }
+        cx += adv;
+    }
+    strlcpy(f.last, key, sizeof(f.last));
     return true;
 }
 
@@ -702,10 +734,13 @@ static int update_clock()
 
     // oben links: kH/s ohne Nachkomma (abgeschnitten) + kleine Einheit in Archivo
     snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.khCurrent);
-    if (ck_changed(K_HASH, b)) {
-        put(b, &DSEG7B12pt7b, X + 13, Y + 25, C_GREEN);
-        put("kH/s", &ArchivoNB8pt7b, X + 13 + gfx_width(b, &DSEG7B12pt7b) + 5, Y + 25, C_GREEN);
-        n++;
+    {
+        const size_t oldLen = strchr(K_HASH.last, '@') ? (size_t)(strchr(K_HASH.last, '@') - K_HASH.last) : 0;
+        if (mono_diff(K_HASH, b, &DSEG7B12pt7b, 13, 25, C_GREEN)) {
+            if (oldLen != strlen(b))   // Einheit nur neu, wenn sich die Stellenzahl aendert
+                put("kH/s", &ArchivoNB8pt7b, 13 + gfx_width(b, &DSEG7B12pt7b) + 5, 25, C_GREEN);
+            n++;
+        }
     }
     // oben rechts: Bloecke (nur Zahl) oder Dollarkurs
     if (s_cfg.ckRight == 1) {
@@ -713,13 +748,13 @@ static int update_clock()
         char key[44]; snprintf(key, sizeof(key), "$%s", b);
         if (ck_changed(K_RIGHT, key)) {
             const int16_t w = gfx_width(b, &DSEG7B12pt7b), ws = gfx_width("$", &ArchivoNB12pt7b);
-            put("$", &ArchivoNB12pt7b, X + 227 - w - ws - 2, Y + 25, C_ACCENT);
-            put(b, &DSEG7B12pt7b, X + 227 - w, Y + 25, C_ACCENT);
+            put("$", &ArchivoNB12pt7b, s_w - 13 - w - ws - 2, 25, C_ACCENT);
+            put(b, &DSEG7B12pt7b, s_w - 13 - w, 25, C_ACCENT);
             n++;
         }
     } else {
         snprintf(b, sizeof(b), "%lu", (unsigned long)g_stats.blocksFound);
-        if (ck_changed(K_RIGHT, b)) { put(b, &DSEG7B12pt7b, X + 227 - gfx_width(b, &DSEG7B12pt7b), Y + 25, C_ACCENT); n++; }
+        if (mono_diff(K_RIGHT, b, &DSEG7B12pt7b, s_w - 13 - gfx_width(b, &DSEG7B12pt7b), 25, C_ACCENT)) n++;
     }
 
     time_t now = time(nullptr);
@@ -727,7 +762,7 @@ static int update_clock()
     localtime_r(&now, &t);
     const bool ok = t.tm_year >= 120;
     if (ok) snprintf(b, sizeof(b), "%02d:%02d", t.tm_hour, t.tm_min); else strlcpy(b, "--:--", sizeof(b));
-    if (ck_changed(K_TIME, b)) { put(b, &DSEG7B26pt7b, X + (240 - gfx_width(b, &DSEG7B26pt7b)) / 2, Y + 134, ok ? C_TEXT : C_MUTED); n++; }
+    if (mono_diff(K_TIME, b, &DSEG7B26pt7b, X + (240 - gfx_width(b, &DSEG7B26pt7b)) / 2, Y + 134, ok ? C_TEXT : C_MUTED)) n++;
 
     static const char* WD[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
     char d[16];
@@ -745,12 +780,12 @@ static int update_clock()
     // unten links: Version nur aus Ziffern ("1.3.1-d10" -> "1.3.1.10", 7-Segment kann kein "d")
     String v = MINER_VERSION;
     v.replace("-d", ".");
-    if (ck_changed(K_VER, v.c_str())) { put(v.c_str(), &ArchivoNB10pt7b, X + 13, Y + 229, C_MUTED); n++; }
+    if (ck_changed(K_VER, v.c_str())) { put(v.c_str(), &ArchivoNB10pt7b, 13, s_h - 11, C_MUTED); n++; }
     // unten rechts: IP oder Pool
-    const int16_t maxW = 227 - 13 - gfx_width(v.c_str(), &ArchivoNB10pt7b) - 12;
+    const int16_t maxW = s_w - 26 - gfx_width(v.c_str(), &ArchivoNB10pt7b) - 12;
     if (s_cfg.ckBottom == 1) ck_pool(b, sizeof(b), &ArchivoNB10pt7b, maxW);
     else strlcpy(b, WiFi.localIP().toString().c_str(), sizeof(b));
-    if (ck_changed(K_BOT, b)) { put(b, &ArchivoNB10pt7b, X + 227 - gfx_width(b, &ArchivoNB10pt7b), Y + 229, C_MUTED); n++; }
+    if (ck_changed(K_BOT, b)) { put(b, &ArchivoNB10pt7b, s_w - 13 - gfx_width(b, &ArchivoNB10pt7b), s_h - 11, C_MUTED); n++; }
     return n;
 }
 
