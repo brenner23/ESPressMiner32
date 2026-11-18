@@ -13,6 +13,8 @@ Nachtlauf 9,6 h: Ø **1033,7 kH/s**, nie unter 1032, **0 Neustarts, 851/851 Shar
 
 🔗 **Projektseite:** https://github.com/brenner23/ESPressMiner32
 
+🖥 **Mit Display (NM-TV 1,54", CYD)?** → [**ESPressMiner32 Plus**](https://github.com/brenner23/ESPressMiner32-Plus): gleicher Miner-Kern, dazu Dashboard, Uhr und Bildseiten.
+
 > ⚠️ **Hobbyprojekt.** Mit einem ESP32 findet man realistisch keinen Bitcoin-Block. Es geht ums Lernen,
 > Basteln und Ausreizen der Hardware. Ideal für Solo-Pools, Lotterie-Mining oder den eigenen Test-Pool.
 

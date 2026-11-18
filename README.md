@@ -13,6 +13,8 @@ Night run 9.6 h: average **1033.7 kH/s**, never below 1032, **0 restarts, 851/85
 
 🔗 **Project page:** https://github.com/brenner23/ESPressMiner32
 
+🖥 **With a display (NM-TV 1.54", CYD)?** → [**ESPressMiner32 Plus**](https://github.com/brenner23/ESPressMiner32-Plus): same miner core, plus dashboard, clock and picture pages.
+
 > ⚠️ **Hobby project.** Realistically an ESP32 will never find a Bitcoin block. This is about learning,
 > tinkering and pushing the hardware to its limit. Great for solo pools, lottery mining or your own test pool.
 >
